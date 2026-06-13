@@ -485,6 +485,11 @@ input[type="range"].rng::-moz-range-thumb {
   fill: var(--accent);
   transition: transform 0.5s ease;
 }
+.chip .rain-ico {
+  width: 12px;
+  height: 12px;
+  fill: var(--accent);
+}
 
 /* ===== HP: panel lebih ringkas biar peta dapat ruang lebih ===== */
 @media (max-width: 440px) {

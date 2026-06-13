@@ -74,6 +74,7 @@ const IconMoon = (
 type Conditions = {
   aq: { psi: number; pm25: number | null; label: string; color: string } | null;
   wind: { speed: number; deg: number; label: string; station?: string } | null;
+  rain: { mm: number; station: string } | null;
 };
 
 export default function RadarMap() {
@@ -269,8 +270,20 @@ export default function RadarMap() {
           </div>
         </div>
 
-        {conditions && (conditions.aq || conditions.wind) && (
+        {conditions && (conditions.aq || conditions.wind || conditions.rain) && (
           <div className="conditions">
+            {conditions.rain && (
+              <span
+                className="chip"
+                title={`Curah hujan 5 menit ${conditions.rain.mm} mm di ${conditions.rain.station} — stasiun Singapura terdekat (proxy leading-edge buat Batam)`}
+              >
+                <svg className="rain-ico" viewBox="0 0 24 24" aria-hidden>
+                  <path d="M12 2.5c3.6 4.3 6 7.6 6 10.8a6 6 0 0 1-12 0c0-3.2 2.4-6.5 6-10.8Z" />
+                </svg>
+                Hujan <b>{conditions.rain.mm} mm</b>
+                <span className="chip-sub">{conditions.rain.station}</span>
+              </span>
+            )}
             {conditions.aq && (
               <span
                 className="chip"

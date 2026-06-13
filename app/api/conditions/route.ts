@@ -7,11 +7,14 @@ export const revalidate = 300;
 
 type Aq = { psi: number; pm25: number | null; label: string; color: string };
 type Wind = { speed: number; deg: number; label: string; station?: string };
+type Rain = { mm: number; station: string };
 
 const PSI_URL = "https://api.data.gov.sg/v1/environment/psi";
+const RAIN_URL = "https://api.data.gov.sg/v1/environment/rainfall";
 const WIND_SPEED_URL = "https://api-open.data.gov.sg/v2/real-time/api/wind-speed";
 const WIND_DIR_URL = "https://api-open.data.gov.sg/v2/real-time/api/wind-direction";
 const STATION = "S102"; // Semakau
+const SOUTH_LAT = 1.3; // batas: stasiun paling selatan SG (terdekat ke Batam)
 
 const COMPASS = ["U", "TL", "T", "TG", "S", "BD", "B", "BL"]; // 8 arah mata angin
 function compass(deg: number): string {
@@ -77,10 +80,37 @@ async function getWind(): Promise<Wind | null> {
   };
 }
 
+// Hujan terdekat: mm tertinggi 5-menit di antara stasiun NEA paling selatan
+// (terdekat ke Batam). Cuma dikembalikan kalau ADA hujan (mm > 0).
+async function getRain(): Promise<Rain | null> {
+  try {
+    const res = await fetch(RAIN_URL, { next: { revalidate: 300 } });
+    if (!res.ok) return null;
+    const j = await res.json();
+    const stations: Array<{ id: string; name?: string; location?: { latitude?: number } }> =
+      j?.metadata?.stations ?? [];
+    const readings: Array<{ station_id: string; value: number }> = j?.items?.[0]?.readings ?? [];
+    const south = new Map<string, string>();
+    for (const s of stations) {
+      const lat = s?.location?.latitude;
+      if (typeof lat === "number" && lat <= SOUTH_LAT) south.set(s.id, s.name ?? s.id);
+    }
+    let best: Rain | null = null;
+    for (const r of readings) {
+      if (south.has(r.station_id) && typeof r.value === "number" && r.value > (best?.mm ?? 0)) {
+        best = { mm: Math.round(r.value * 10) / 10, station: south.get(r.station_id)! };
+      }
+    }
+    return best && best.mm > 0 ? best : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function GET() {
-  const [aq, wind] = await Promise.all([getAq(), getWind()]);
+  const [aq, wind, rain] = await Promise.all([getAq(), getWind(), getRain()]);
   return Response.json(
-    { aq, wind },
+    { aq, wind, rain },
     { headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600" } },
   );
 }
