@@ -71,6 +71,11 @@ const IconMoon = (
   </svg>
 );
 
+type Conditions = {
+  aq: { psi: number; pm25: number | null; label: string; color: string } | null;
+  wind: { speed: number; deg: number; label: string; station?: string } | null;
+};
+
 export default function RadarMap() {
   const [frames, setFrames] = useState<Frame[]>([]);
   const [idx, setIdx] = useState(0);
@@ -78,6 +83,7 @@ export default function RadarMap() {
   const [opacity, setOpacity] = useState(0.8);
   const [view, setView] = useState<ViewKey>(DEFAULT_VIEW);
   const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
+  const [conditions, setConditions] = useState<Conditions | null>(null);
 
   const followRef = useRef(true);
   const themeOverride = useRef<ThemeMode | null>(null);
@@ -132,6 +138,22 @@ export default function RadarMap() {
     const t = setInterval(loadFrames, REFRESH_MS);
     return () => clearInterval(t);
   }, [loadFrames]);
+
+  const loadConditions = useCallback(async () => {
+    try {
+      const res = await fetch("/api/conditions");
+      if (!res.ok) return;
+      setConditions(await res.json());
+    } catch {
+      /* abaikan — chip tinggal nggak muncul */
+    }
+  }, []);
+
+  useEffect(() => {
+    loadConditions();
+    const t = setInterval(loadConditions, REFRESH_MS);
+    return () => clearInterval(t);
+  }, [loadConditions]);
 
   useEffect(() => {
     frames.forEach((f) => {
@@ -246,6 +268,40 @@ export default function RadarMap() {
             {isLatest ? "Citra terakhir" : "Putar ulang"}
           </div>
         </div>
+
+        {conditions && (conditions.aq || conditions.wind) && (
+          <div className="conditions">
+            {conditions.aq && (
+              <span
+                className="chip"
+                title={`PSI 24 jam ${conditions.aq.psi}${
+                  conditions.aq.pm25 != null ? ` · PM2.5 ${conditions.aq.pm25}` : ""
+                } — region Singapura selatan (proxy haze Batam)`}
+              >
+                <span className="chip-dot" style={{ background: conditions.aq.color }} />
+                Udara <b>{conditions.aq.psi}</b>
+                <span className="chip-sub">{conditions.aq.label}</span>
+              </span>
+            )}
+            {conditions.wind && (
+              <span
+                className="chip"
+                title={`Angin${conditions.wind.station ? ` · ${conditions.wind.station}` : ""}`}
+              >
+                <svg
+                  className="wind-arrow"
+                  viewBox="0 0 24 24"
+                  style={{ transform: `rotate(${conditions.wind.deg + 180}deg)` }}
+                  aria-hidden
+                >
+                  <path d="M12 3l5 8h-3v8h-4v-8H7z" />
+                </svg>
+                Angin <b>{conditions.wind.speed} kt</b>
+                <span className="chip-sub">dari {conditions.wind.label}</span>
+              </span>
+            )}
+          </div>
+        )}
 
         <div className="segmented" role="tablist" aria-label="Pilih cakupan">
           {(Object.keys(VIEWS) as ViewKey[]).map((k) => (
