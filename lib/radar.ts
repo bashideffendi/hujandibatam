@@ -53,14 +53,14 @@ export const DEFAULT_VIEW: ViewKey = "batam";
 // Sisihkan ruang buat chrome saat fit: atas = topbar, bawah = panel kontrol.
 // Format Leaflet Point [x, y] (px).
 export const VIEW_PADDING = {
-  paddingTopLeft: [12, 76] as [number, number],
-  paddingBottomRight: [12, 240] as [number, number],
+  paddingTopLeft: [14, 76] as [number, number],
+  paddingBottomRight: [14, 238] as [number, number],
 };
 
-// Basemap per tema (CARTO).
+// Basemap per tema (CARTO) — minimalis biar radar pop & kesan elegant.
 export const TILES: Record<ThemeMode, string> = {
-  light: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-  dark: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+  light: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", // Positron
+  dark: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", // Dark Matter
 };
 
 // Penanda kota buat orientasi.

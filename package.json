@@ -1,8 +1,8 @@
 {
-  "name": "gerimis",
+  "name": "hujandibatam",
   "version": "0.1.0",
   "private": true,
-  "description": "Radar hujan Batam & sekitarnya — data Meteorological Service Singapore",
+  "description": "Hujan di Batam — radar hujan real-time Batam & sekitarnya (data Meteorological Service Singapore)",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

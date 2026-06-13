@@ -28,7 +28,7 @@ import {
 
 const REFRESH_MS = 5 * 60 * 1000;
 const PLAY_MS = 650;
-const THEME_KEY = "gerimis-theme";
+const THEME_KEY = "hujan-theme";
 
 // Terbangkan peta ke preset view tiap kali view berubah.
 function ViewController({ view }: { view: ViewKey }) {
@@ -158,13 +158,8 @@ export default function RadarMap() {
           <CircleMarker
             key={p.name}
             center={[p.lat, p.lng]}
-            radius={3}
-            pathOptions={{
-              color: theme === "dark" ? "#cbd5e1" : "#334155",
-              weight: 1,
-              fillColor: "#ffffff",
-              fillOpacity: 1,
-            }}
+            radius={2.5}
+            pathOptions={{ color: "#6b7280", weight: 1, fillColor: "#ffffff", fillOpacity: 1 }}
           >
             <Tooltip permanent direction="right" offset={[6, 0]} className="place-label">
               {p.name}
@@ -178,23 +173,16 @@ export default function RadarMap() {
 
       <header className="topbar">
         <div className="brand">
-          <div className="logo">
-            <svg viewBox="0 0 24 24" fill="none" style={{ width: 22, height: 22 }}>
-              <path
-                d="M7 16.5a4 4 0 0 1 .5-7.97A5.5 5.5 0 0 1 18 9.2a3.5 3.5 0 0 1-.5 7.3H7Z"
-                fill="var(--logo-cloud)"
-              />
-              <path
-                d="M9.3 19.4l-.9 2M12.3 19.3l-1 2.2M15.3 19.4l-.9 2"
-                stroke="var(--logo-rain)"
-                strokeWidth={1.8}
-                strokeLinecap="round"
-              />
+          <span className="mark">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2.5c3.6 4.3 6 7.6 6 10.8a6 6 0 0 1-12 0c0-3.2 2.4-6.5 6-10.8Z" />
             </svg>
-          </div>
+          </span>
           <div>
-            <div className="name">Gerimis</div>
-            <div className="sub">Radar hujan Batam &amp; sekitarnya</div>
+            <div className="name">
+              Hujan <i>di</i> Batam
+            </div>
+            <div className="sub">Radar hujan · Batam &amp; sekitarnya</div>
           </div>
         </div>
         <div className="topbar-right">
@@ -317,7 +305,7 @@ export default function RadarMap() {
           >
             Meteorological Service Singapore
           </a>{" "}
-          · diperbarui tiap 15 menit · posisi overlay dikalibrasi ke radar Changi
+          · diperbarui tiap 15 menit
         </div>
       </section>
     </div>
