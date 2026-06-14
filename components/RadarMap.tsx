@@ -101,6 +101,11 @@ type Conditions = {
   uv: { value: number; label: string; color: string } | null;
 };
 
+type BIPEvent = Event & {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: string }>;
+};
+
 export default function RadarMap() {
   const [frames, setFrames] = useState<Frame[]>([]);
   const [idx, setIdx] = useState(0);
@@ -119,6 +124,7 @@ export default function RadarMap() {
 
   const [stale, setStale] = useState(false);
   const [conditionsError, setConditionsError] = useState(false);
+  const [installEvt, setInstallEvt] = useState<BIPEvent | null>(null);
 
   const followRef = useRef(true);
   const themeOverride = useRef<ThemeMode | null>(null);
@@ -218,6 +224,32 @@ export default function RadarMap() {
     }
   }, [collapsed]);
 
+  // Tangkap prompt install PWA (Chrome) → tampilin tombol "Pasang" manual.
+  useEffect(() => {
+    const onBIP = (e: Event) => {
+      e.preventDefault();
+      setInstallEvt(e as BIPEvent);
+    };
+    const onInstalled = () => setInstallEvt(null);
+    window.addEventListener("beforeinstallprompt", onBIP);
+    window.addEventListener("appinstalled", onInstalled);
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onBIP);
+      window.removeEventListener("appinstalled", onInstalled);
+    };
+  }, []);
+
+  async function doInstall() {
+    if (!installEvt) return;
+    try {
+      await installEvt.prompt();
+      await installEvt.userChoice;
+    } catch {
+      /* abaikan */
+    }
+    setInstallEvt(null);
+  }
+
   function toggleTheme() {
     setTheme((t) => {
       const next: ThemeMode = t === "dark" ? "light" : "dark";
@@ -289,6 +321,26 @@ export default function RadarMap() {
           </div>
         </div>
         <div className="topbar-right">
+          {installEvt && (
+            <button
+              className="install-btn"
+              onClick={doInstall}
+              aria-label="Pasang aplikasi ke layar utama"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.8}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden
+              >
+                <path d="M12 3v12M7 11l5 4 5-4M5 21h14" />
+              </svg>
+              Pasang
+            </button>
+          )}
           <span className="live-pill" data-stale={stale ? "" : undefined}>
             <span className="dot" /> {stale ? "Tertunda" : "Langsung"}
           </span>
