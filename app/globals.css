@@ -627,6 +627,56 @@ input[type="range"].rng::-moz-range-thumb {
   height: 14px;
 }
 
+/* petunjuk install iOS (Safari only, manual via Share) */
+.ios-hint {
+  position: absolute;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 600;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  max-width: calc(100% - 24px);
+  background: var(--panel-bg);
+  -webkit-backdrop-filter: blur(9px);
+  backdrop-filter: blur(9px);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  box-shadow: var(--panel-shadow);
+  padding: 9px 8px 9px 12px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  line-height: 1.35;
+  animation: fadein 0.35s ease both;
+}
+.ios-hint b {
+  color: var(--text);
+  font-weight: 600;
+}
+.ios-hint .ios-share {
+  width: 19px;
+  height: 19px;
+  flex: none;
+  color: var(--accent);
+}
+.ios-hint-x {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-dim);
+  display: grid;
+  place-items: center;
+}
+.ios-hint-x svg {
+  width: 14px;
+  height: 14px;
+}
+
 /* ===== atribusi peta (Leaflet) — wajib & terbaca ===== */
 .leaflet-control-attribution {
   background: var(--panel-bg) !important;

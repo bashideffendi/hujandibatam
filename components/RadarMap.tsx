@@ -24,6 +24,7 @@ import {
   type ThemeMode,
   type ViewKey,
 } from "@/lib/radar";
+import IosInstallHint from "./IosInstallHint";
 
 const REFRESH_MS = 2 * 60 * 1000; // refetch frame & kondisi tiap 2 mnt (radar terbit tiap 5 mnt)
 const PLAY_MS = 650;
@@ -583,6 +584,8 @@ export default function RadarMap() {
           </>
         )}
       </section>
+
+      <IosInstallHint />
     </div>
   );
 }
