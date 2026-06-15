@@ -361,14 +361,27 @@ export default function RadarMap() {
         ref={panelRef}
         data-collapsed={collapsed}
       >
-        <button
-          className="panel-handle"
-          onClick={() => setCollapsed((c) => !c)}
-          aria-label={collapsed ? "Buka panel" : "Sembunyikan panel"}
-          aria-expanded={!collapsed}
-        >
-          <span className="grip" />
-        </button>
+        {!collapsed && (
+          <button
+            className="panel-handle"
+            onClick={() => setCollapsed(true)}
+            aria-label="Sembunyikan panel"
+            aria-expanded={true}
+          >
+            <svg
+              className="handle-chevron"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
+        )}
 
         {collapsed ? (
           <button className="panel-mini" onClick={() => setCollapsed(false)}>
