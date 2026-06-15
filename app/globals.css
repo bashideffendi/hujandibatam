@@ -756,3 +756,43 @@ input[type="range"].rng::-moz-range-thumb {
     height: 22px;
   }
 }
+
+/* ===== Laptop/desktop: card lebih ringkas & rendah profil ===== */
+/* status + kondisi jadi SATU baris, spasi dirapatin. HP/tablet portrait nggak keubah. */
+@media (min-width: 900px) {
+  .panel {
+    width: min(640px, calc(100% - 40px));
+    padding: 14px 20px 11px;
+  }
+  .panel-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 13px;
+  }
+  .panel-top .status {
+    flex: none;
+    margin-bottom: 0;
+  }
+  .panel-top .conditions {
+    flex: 1;
+    justify-content: flex-end;
+    margin-bottom: 0;
+  }
+  .status .time {
+    font-size: 24px;
+  }
+  .segmented {
+    margin-bottom: 12px;
+  }
+  .transport {
+    gap: 14px;
+  }
+  .meta {
+    margin-top: 12px;
+  }
+  .credit {
+    margin-top: 10px;
+  }
+}

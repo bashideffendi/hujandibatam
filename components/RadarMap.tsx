@@ -396,6 +396,7 @@ export default function RadarMap() {
           </button>
         ) : (
           <>
+        <div className="panel-top">
         <div className="status">
           <div>
             <div className="time">
@@ -490,6 +491,7 @@ export default function RadarMap() {
         {conditionsError && !conditions && (
           <div className="conditions-err">Data cuaca tambahan lagi nggak tersedia</div>
         )}
+        </div>
 
         <div className="segmented" role="tablist" aria-label="Pilih cakupan">
           {(Object.keys(VIEWS) as ViewKey[]).map((k) => (
