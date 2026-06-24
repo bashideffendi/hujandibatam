@@ -24,6 +24,7 @@ import {
   WAVE_PERIODS,
   WAVE_RANGE,
   timeBasedTheme,
+  wavePeriodLabel,
   type Frame,
   type Mode,
   type ThemeMode,
@@ -180,6 +181,8 @@ export default function RadarMap() {
   const preloadedRef = useRef<Set<string>>(new Set());
   const wavePeriodRef = useRef(0);
   wavePeriodRef.current = wavePeriod;
+  const manualPeriodRef = useRef(false); // user scrub manual → jangan auto-realign tiap refetch
+  const nowIndexRef = useRef(0);
 
   // Padding fit dinamis: ukur tinggi panel asli (di HP panel bisa lebih tinggi karena
   // konten wrap) biar wilayah selalu ke-frame penuh DI ATAS panel, nggak ketutup.
@@ -257,9 +260,10 @@ export default function RadarMap() {
       if (!res.ok) throw new Error("bad");
       const d: WaveOverview = await res.json();
       setWaveData(d);
-      // buka di periode yg nutupin jam sekarang (bukan default "Hari ini" yg bisa basi)
-      if (resetPeriod && typeof d.nowIndex === "number") {
-        setWavePeriod(Math.max(0, Math.min(3, d.nowIndex)));
+      // Realign ke periode yg nutupin jam-sekarang, KECUALI user lagi scrub manual
+      // (biar reopen PWA sesudah lewat hari nggak nampilin periode basi).
+      if ((resetPeriod || !manualPeriodRef.current) && typeof d.nowIndex === "number") {
+        setWavePeriod(Math.max(0, Math.min(WAVE_PERIODS.length - 1, d.nowIndex)));
       }
     } catch {
       /* graceful: layer pakai warna fallback abu */
@@ -379,6 +383,10 @@ export default function RadarMap() {
   function switchMode(next: Mode) {
     if (next === mode) return;
     setPlaying(false);
+    if (next === "hujan") {
+      manualPeriodRef.current = false; // keluar ombak → boleh auto-realign periode lagi
+      if (view === "natuna") setView("regional"); // view "Natuna" cuma valid di mode ombak
+    }
     setMode(next);
   }
 
@@ -401,7 +409,7 @@ export default function RadarMap() {
       const name = esc(String(j?.name ?? code));
       if (!p)
         return `<div class="wave-pop"><div class="wp-area">${name}</div><div class="wp-row">Data belum tersedia</div></div>`;
-      const label = WAVE_PERIODS[i]?.label ?? "";
+      const label = wavePeriodLabel(i, nowIndexRef.current);
       const warn = p.warning ? `<div class="wp-warn">${esc(p.warning)}</div>` : "";
       return `<div class="wave-pop"><div class="wp-area">${name}</div><div class="wp-period">${esc(
         label,
@@ -419,7 +427,11 @@ export default function RadarMap() {
   const isLatest = frames.length > 0 && idx === frames.length - 1;
   const ready = frames.length >= 2;
   const periodKey = WAVE_PERIODS[wavePeriod]?.key ?? "today";
-  const periodLabel = WAVE_PERIODS[wavePeriod]?.label ?? "";
+  const nowIndex = waveData?.nowIndex ?? 0;
+  nowIndexRef.current = nowIndex;
+  const periodLabel = wavePeriodLabel(wavePeriod, nowIndex);
+  const viewKeys: ViewKey[] =
+    mode === "ombak" ? ["batam", "regional", "kepri", "natuna"] : ["batam", "regional", "kepri"];
   const waveReady = Boolean(waveData?.areas && Object.keys(waveData.areas).length);
   // issued BMKG (UTC) → jam WIB; +7 jam DULU baru format (hindari salah tanggal di batas tengah malam)
   const issuedWib = (() => {
@@ -711,7 +723,7 @@ export default function RadarMap() {
             {conditions.wave && (
               <span
                 className="chip"
-                title={`Gelombang ${conditions.wave.area} (prakiraan BMKG): ${conditions.wave.cat}, ${conditions.wave.desc}. Angin dari ${conditions.wave.windFrom} ${conditions.wave.windMin}–${conditions.wave.windMax} knot. ${conditions.wave.weather}.${
+                title={`Gelombang ${conditions.wave.area} (prakiraan BMKG): ${conditions.wave.cat}, ${fmtWaveDesc(conditions.wave.desc)}. Angin dari ${conditions.wave.windFrom} ${conditions.wave.windMin}–${conditions.wave.windMax} knot. ${conditions.wave.weather}.${
                   conditions.wave.warning ? ` ${conditions.wave.warning}.` : ""
                 }`}
               >
@@ -728,8 +740,7 @@ export default function RadarMap() {
                   <path d="M2 8.5c1.8 0 1.8 2 3.6 2s1.8-2 3.6-2 1.8 2 3.6 2 1.8-2 3.6-2 1.8 2 3.6 2" />
                   <path d="M2 14c1.8 0 1.8 2 3.6 2s1.8-2 3.6-2 1.8 2 3.6 2 1.8-2 3.6-2 1.8 2 3.6 2" />
                 </svg>
-                Ombak{" "}
-                <b>{conditions.wave.desc.replace(" - ", "–").replace(/(\d)\.(\d)/g, "$1,$2")}</b>
+                Ombak <b>{fmtWaveDesc(conditions.wave.desc)}</b>
                 <span className="chip-sub">{conditions.wave.cat}</span>
               </span>
             )}
@@ -741,12 +752,11 @@ export default function RadarMap() {
         )}
         </div>
 
-        <div className="mode-switch" role="tablist" aria-label="Pilih tampilan">
+        <div className="mode-switch" role="group" aria-label="Pilih tampilan">
           <button
             className={`mode-btn ${mode === "hujan" ? "active" : ""}`}
             onClick={() => switchMode("hujan")}
-            role="tab"
-            aria-selected={mode === "hujan"}
+            aria-pressed={mode === "hujan"}
           >
             <svg className="mode-ico" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
               <path d="M12 2.5c3.6 4.3 6 7.6 6 10.8a6 6 0 0 1-12 0c0-3.2 2.4-6.5 6-10.8Z" />
@@ -756,8 +766,7 @@ export default function RadarMap() {
           <button
             className={`mode-btn ${mode === "ombak" ? "active" : ""}`}
             onClick={() => switchMode("ombak")}
-            role="tab"
-            aria-selected={mode === "ombak"}
+            aria-pressed={mode === "ombak"}
           >
             <svg
               className="mode-ico"
@@ -776,14 +785,18 @@ export default function RadarMap() {
           </button>
         </div>
 
-        <div className="segmented" role="tablist" aria-label="Pilih cakupan">
-          {(Object.keys(VIEWS) as ViewKey[]).map((k) => (
+        <div
+          className="segmented"
+          role="group"
+          aria-label="Pilih cakupan"
+          style={{ gridTemplateColumns: `repeat(${viewKeys.length}, 1fr)` }}
+        >
+          {viewKeys.map((k) => (
             <button
               key={k}
               className={`seg-btn ${view === k ? "active" : ""}`}
               onClick={() => setView(k)}
-              role="tab"
-              aria-selected={view === k}
+              aria-pressed={view === k}
             >
               {VIEWS[k].label}
               <span className="k">{VIEWS[k].sub}</span>
@@ -794,10 +807,22 @@ export default function RadarMap() {
         <div className="transport">
           <button
             className="play"
-            onClick={() => setPlaying((p) => !p)}
-            disabled={mode === "hujan" ? !ready : !waveReady}
+            onClick={() =>
+              setPlaying((p) => {
+                // mulai sweep dari periode-sekarang kalau lagi mentok di periode terakhir
+                if (!p && mode === "ombak" && wavePeriod >= WAVE_PERIODS.length - 1)
+                  setWavePeriod(nowIndex);
+                return !p;
+              })
+            }
+            disabled={mode === "hujan" ? !ready : !waveReady || nowIndex >= WAVE_PERIODS.length - 1}
             aria-label={playing ? "Jeda" : "Putar"}
-            style={{ opacity: (mode === "hujan" ? ready : waveReady) ? 1 : 0.5 }}
+            style={{
+              opacity:
+                (mode === "hujan" ? ready : waveReady && nowIndex < WAVE_PERIODS.length - 1)
+                  ? 1
+                  : 0.5,
+            }}
           >
             {playing ? (
               <svg viewBox="0 0 24 24" fill="currentColor">
@@ -810,22 +835,25 @@ export default function RadarMap() {
             )}
           </button>
           {mode === "ombak" ? (
-            <div className="period-step" role="tablist" aria-label="Periode prakiraan gelombang">
-              {WAVE_PERIODS.map((p, i) => (
-                <button
-                  key={p.key}
-                  className={`step-btn ${wavePeriod === i ? "active" : ""}`}
-                  onClick={() => {
-                    setPlaying(false);
-                    setWavePeriod(i);
-                  }}
-                  disabled={!waveReady}
-                  role="tab"
-                  aria-selected={wavePeriod === i}
-                >
-                  {p.label}
-                </button>
-              ))}
+            <div className="period-step" role="group" aria-label="Periode prakiraan gelombang">
+              {WAVE_PERIODS.slice(nowIndex).map((p, j) => {
+                const i = nowIndex + j; // cuma periode sekarang→depan (yg lewat disembunyiin)
+                return (
+                  <button
+                    key={p.key}
+                    className={`step-btn ${wavePeriod === i ? "active" : ""}`}
+                    onClick={() => {
+                      setPlaying(false);
+                      manualPeriodRef.current = true; // scrub manual → tahan auto-realign
+                      setWavePeriod(i);
+                    }}
+                    disabled={!waveReady}
+                    aria-pressed={wavePeriod === i}
+                  >
+                    {wavePeriodLabel(i, nowIndex)}
+                  </button>
+                );
+              })}
             </div>
           ) : (
             <input

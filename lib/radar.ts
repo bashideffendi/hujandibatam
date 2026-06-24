@@ -14,7 +14,7 @@ export type Frame = {
 };
 
 export type ThemeMode = "light" | "dark";
-export type ViewKey = "batam" | "regional" | "kepri";
+export type ViewKey = "batam" | "regional" | "kepri" | "natuna";
 
 // Leaflet butuh bounds [[south, west], [north, east]] = [[lat_min,lng_min],[lat_max,lng_max]].
 //
@@ -47,6 +47,9 @@ export const VIEWS: Record<
   batam: { label: "Kota Batam", sub: "fokus", bounds: [[0.98, 103.9], [1.19, 104.16]] },
   regional: { label: "Regional", sub: "240 km", bounds: [[-0.4, 102.4], [2.7, 105.3]] },
   kepri: { label: "Kepri", sub: "provinsi", bounds: [[0.1, 103.25], [1.28, 104.75]] },
+  // Khusus mode OMBAK: mundur ke timur-laut biar Anambas + Natuna (Utara) keliatan.
+  // Radar hujan nggak nyampe sini, jadi view ini cuma muncul di mode OMBAK.
+  natuna: { label: "Natuna", sub: "laut lepas", bounds: [[-1.4, 102.6], [4.8, 108.2]] },
 };
 export const DEFAULT_VIEW: ViewKey = "batam";
 
@@ -136,6 +139,19 @@ export const WAVE_BORDER: Record<ThemeMode, string> = {
   light: "rgba(20, 24, 33, 0.42)",
   dark: "rgba(255, 255, 255, 0.46)",
 };
+
+// Label periode RELATIF ke periode yg nutupin jam-sekarang (nowIndex). Penting: key
+// overview (today/tomorrow/…) itu relatif WAKTU TERBIT BMKG, bukan tanggal absolut —
+// jadi periode di nowIndex HARUS dibaca "Hari ini" (offset 0), bukan label tetap.
+export function wavePeriodLabel(index: number, nowIndex: number): string {
+  const o = index - nowIndex;
+  if (o === 0) return "Hari ini";
+  if (o === 1) return "Besok";
+  if (o === 2) return "Lusa";
+  if (o === -1) return "Kemarin";
+  if (o < 0) return `${-o} hari lalu`;
+  return `${o} hari`;
+}
 
 // Normalisasi string kategori BMKG → key kanonik (cek "sangat …" SEBELUM yg polos).
 export function normCat(s: string): string | null {

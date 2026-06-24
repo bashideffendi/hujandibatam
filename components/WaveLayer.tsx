@@ -64,6 +64,11 @@ export default function WaveLayer({ areas, periodKey, opacity, theme, onPick }: 
     [areas, periodKey, opacity, theme],
   );
 
+  // Ref ke styleFor TERKINI — dipakai popupclose biar reset highlight balik ke warna
+  // periode/tema SEKARANG, bukan ke style mount-time (resetStyle Leaflet bikin basi/abu).
+  const styleForRef = useRef(styleFor);
+  styleForRef.current = styleFor;
+
   // Recolor saat periode/tema/opacity/kategori berubah — repaint path, tanpa remount.
   useEffect(() => {
     geoRef.current?.setStyle(styleFor);
@@ -89,7 +94,7 @@ export default function WaveLayer({ areas, periodKey, opacity, theme, onPick }: 
           if (layer.getPopup()) layer.setPopupContent(html);
         });
         layer.on("popupopen", () => (layer as Path).setStyle({ weight: 2.4 }));
-        layer.on("popupclose", () => geoRef.current?.resetStyle(layer));
+        layer.on("popupclose", () => (layer as Path).setStyle(styleForRef.current(feature)));
       }}
     />
   );
