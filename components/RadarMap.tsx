@@ -6,6 +6,7 @@ import {
   CircleMarker,
   ImageOverlay,
   MapContainer,
+  Pane,
   TileLayer,
   Tooltip,
   useMap,
@@ -29,6 +30,7 @@ import {
   type ViewKey,
 } from "@/lib/radar";
 import IosInstallHint from "./IosInstallHint";
+import LandMask from "./LandMask";
 
 const REFRESH_MS = 2 * 60 * 1000; // refetch frame & kondisi tiap 2 mnt (radar terbit tiap 5 mnt)
 const PLAY_MS = 650;
@@ -159,7 +161,7 @@ export default function RadarMap() {
   });
   const [ofs, setOfs] = useState<OfsData | null>(null);
   const [ofsIdx, setOfsIdx] = useState(0);
-  const [waveOpacity, setWaveOpacity] = useState(0.55);
+  const [waveOpacity, setWaveOpacity] = useState(0.85);
 
   const followRef = useRef(true);
   const themeOverride = useRef<ThemeMode | null>(null);
@@ -408,9 +410,7 @@ export default function RadarMap() {
         {mode === "hujan" && current && (
           <ImageOverlay url={current.url} bounds={RADAR_BOUNDS} opacity={opacity} zIndex={300} />
         )}
-        {/* Field gelombang OFS sbg lapisan tembus DI ATAS peta asli (gaya Windy/Zoom Earth):
-            peta asli utuh keliatan, laut keisi field. Land-mask knockout gak feasible di
-            CSS (destination-out bukan mix-blend-mode), + mask numpuk = tabrakan coastline. */}
+        {/* Field gelombang OFS (TMS tile contourf BMKG) di atas basemap */}
         {mode === "ombak" && ofs?.baserun && ofsValid && (
           <TileLayer
             url={OFS_TILE(ofs.baserun, ofsValid)}
@@ -421,18 +421,33 @@ export default function RadarMap() {
             maxZoom={20}
           />
         )}
-        {PLACES.map((p) => (
-          <CircleMarker
-            key={p.name}
-            center={[p.lat, p.lng]}
-            radius={2.5}
-            pathOptions={{ color: "#6b7280", weight: 1, fillColor: "#ffffff", fillOpacity: 1 }}
-          >
-            <Tooltip permanent direction="right" offset={[6, 0]} className="place-label">
-              {p.name}
-            </Tooltip>
-          </CircleMarker>
-        ))}
+        {/* Mask daratan (fill = warna land basemap) di atas field → darat nol-tint, laut field */}
+        {mode === "ombak" && <LandMask theme={theme} />}
+        {/* Label kota/negara di atas mask (basemap asli ketutup field+mask) */}
+        {mode === "ombak" && (
+          <Pane name="ombak-labels" style={{ zIndex: 270, pointerEvents: "none" }}>
+            <TileLayer
+              url={`https://{s}.basemaps.cartocdn.com/${
+                theme === "dark" ? "dark_only_labels" : "light_only_labels"
+              }/{z}/{x}/{y}{r}.png`}
+              subdomains={["a", "b", "c", "d"]}
+              maxZoom={20}
+            />
+          </Pane>
+        )}
+        {mode === "hujan" &&
+          PLACES.map((p) => (
+            <CircleMarker
+              key={p.name}
+              center={[p.lat, p.lng]}
+              radius={2.5}
+              pathOptions={{ color: "#6b7280", weight: 1, fillColor: "#ffffff", fillOpacity: 1 }}
+            >
+              <Tooltip permanent direction="right" offset={[6, 0]} className="place-label">
+                {p.name}
+              </Tooltip>
+            </CircleMarker>
+          ))}
         <MapController view={view} getPadding={getPadding} collapsed={collapsed} mode={mode} />
       </MapContainer>
 
