@@ -161,7 +161,6 @@ export default function RadarMap() {
   });
   const [ofs, setOfs] = useState<OfsData | null>(null);
   const [ofsIdx, setOfsIdx] = useState(0);
-  const [waveOpacity, setWaveOpacity] = useState(0.85);
 
   const followRef = useRef(true);
   const themeOverride = useRef<ThemeMode | null>(null);
@@ -415,7 +414,7 @@ export default function RadarMap() {
           <TileLayer
             url={OFS_TILE(ofs.baserun, ofsValid)}
             tms
-            opacity={waveOpacity}
+            opacity={1}
             zIndex={250}
             maxNativeZoom={8}
             maxZoom={20}
@@ -789,39 +788,41 @@ export default function RadarMap() {
         </div>
 
         <div className="meta">
-          <label className="opacity">
-            {mode === "ombak" ? "Tembus" : "Transparansi"}
-            <input
-              className="rng"
-              type="range"
-              aria-label={mode === "ombak" ? "Transparansi field gelombang" : "Transparansi overlay radar"}
-              min={mode === "ombak" ? 0.3 : 0.3}
-              max={mode === "ombak" ? 0.9 : 1}
-              step={0.05}
-              value={mode === "ombak" ? waveOpacity : opacity}
-              onChange={(e) =>
-                mode === "ombak"
-                  ? setWaveOpacity(Number(e.target.value))
-                  : setOpacity(Number(e.target.value))
-              }
-            />
-          </label>
           {mode === "ombak" ? (
-            <div className="legend">
-              <span className="lab">Tenang</span>
-              <div className="bar" style={{ background: OFS_GRADIENT }} />
-              <span className="lab">Ekstrem</span>
-            </div>
-          ) : (
-            <div className="legend">
-              <span className="lab">Ringan</span>
-              <div className="bar">
-                {LEGEND.map((c) => (
-                  <span key={c} style={{ background: c }} />
+            <div className="ofs-legend">
+              <span className="ofs-lab">Tinggi gelombang (meter) · BMKG</span>
+              <div className="ofs-bar" style={{ background: OFS_GRADIENT }} />
+              <div className="ofs-ticks">
+                {[0, 1, 2, 3, 4, 5, 6, 7].map((m) => (
+                  <span key={m}>{m}</span>
                 ))}
               </div>
-              <span className="lab">Ekstrem</span>
             </div>
+          ) : (
+            <>
+              <label className="opacity">
+                Transparansi
+                <input
+                  className="rng"
+                  type="range"
+                  aria-label="Transparansi overlay radar"
+                  min={0.3}
+                  max={1}
+                  step={0.05}
+                  value={opacity}
+                  onChange={(e) => setOpacity(Number(e.target.value))}
+                />
+              </label>
+              <div className="legend">
+                <span className="lab">Ringan</span>
+                <div className="bar">
+                  {LEGEND.map((c) => (
+                    <span key={c} style={{ background: c }} />
+                  ))}
+                </div>
+                <span className="lab">Ekstrem</span>
+              </div>
+            </>
           )}
         </div>
 
