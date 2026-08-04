@@ -394,6 +394,7 @@ export default function RadarMap() {
   const viewKeys: ViewKey[] =
     mode === "ombak" ? ["batam", "regional", "kepri", "natuna"] : ["batam", "regional", "kepri"];
   const ofsReady = ofsCount > 0;
+  const ofsError = !!ofs && !ofsReady; // udah di-fetch tapi 0 frame = sumber BMKG down/keblok
   const ofsValid = ofs?.frames[ofsIdx];
   const ofsWib = ofsValid ? ofsValidWib(ofsValid) : null;
   const ofsIsNow = ofsReady && ofsIdx === (ofs?.nowIndex ?? 0);
@@ -599,12 +600,14 @@ export default function RadarMap() {
                 <div className="date">
                   {ofsReady
                     ? `Gelombang BMKG${ofsWib ? ` · ${ofsWib.date}` : ""}`
-                    : "Memuat prakiraan…"}
+                    : ofsError
+                      ? "Data gelombang BMKG lagi gangguan — coba lagi nanti"
+                      : "Memuat prakiraan…"}
                 </div>
               </div>
               <div className="state">
                 <span className="d" style={{ background: "var(--text-dim)" }} />
-                {ofsIsNow ? "Sekarang" : "Prakiraan"}
+                {ofsError ? "Gangguan" : ofsIsNow ? "Sekarang" : "Prakiraan"}
               </div>
             </>
           ) : (

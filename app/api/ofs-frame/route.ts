@@ -19,7 +19,14 @@ export async function GET() {
   try {
     const res = await fetch(`${HOST}/api21/modelrun`, {
       cache: "no-store",
-      headers: { "User-Agent": "Hujan di Batam" },
+      // UA browser-normal + Referer (bukan "Hujan di Batam" yg keliatan bot) — BMKG
+      // di belakang Cloudflare, request bot-like gampang di-block "terindikasi serangan".
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        Accept: "application/json, text/plain, */*",
+        Referer: "https://peta-maritim.bmkg.go.id/ofs",
+      },
     });
     const j = await res.json();
     const baseIso: string | undefined = j?.w3g_hires?.[0];
