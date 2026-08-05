@@ -123,7 +123,13 @@ type Conditions = {
   uv: { value: number; label: string; color: string } | null;
 };
 
-type OfsData = { baserun: string | null; frames: string[]; nowIndex: number };
+type OfsData = {
+  baserun: string | null;
+  frames: string[];
+  nowIndex: number;
+  fallback?: boolean;
+  ageH?: number;
+};
 
 type BIPEvent = Event & {
   prompt: () => Promise<void>;
@@ -398,6 +404,7 @@ export default function RadarMap() {
   const ofsValid = ofs?.frames[ofsIdx];
   const ofsWib = ofsValid ? ofsValidWib(ofsValid) : null;
   const ofsIsNow = ofsReady && ofsIdx === (ofs?.nowIndex ?? 0);
+  const ofsStale = ofsReady && (ofs?.ageH ?? 0) > 18; // run > 18h = update BMKG lagi tertunda
 
   return (
     <div data-theme={theme} style={{ position: "absolute", inset: 0 }}>
@@ -599,7 +606,9 @@ export default function RadarMap() {
                 </div>
                 <div className="date">
                   {ofsReady
-                    ? `Gelombang BMKG${ofsWib ? ` · ${ofsWib.date}` : ""}`
+                    ? `Gelombang BMKG${ofsWib ? ` · ${ofsWib.date}` : ""}${
+                        ofsStale ? " · update tertunda" : ""
+                      }`
                     : ofsError
                       ? "Data gelombang BMKG lagi gangguan — coba lagi nanti"
                       : "Memuat prakiraan…"}
