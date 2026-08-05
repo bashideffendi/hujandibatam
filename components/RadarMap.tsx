@@ -404,7 +404,8 @@ export default function RadarMap() {
   const ofsValid = ofs?.frames[ofsIdx];
   const ofsWib = ofsValid ? ofsValidWib(ofsValid) : null;
   const ofsIsNow = ofsReady && ofsIdx === (ofs?.nowIndex ?? 0);
-  const ofsStale = ofsReady && (ofs?.ageH ?? 0) > 18; // run > 18h = update BMKG lagi tertunda
+  // fallback = modelrun BMKG keblok → pakai run tersimpan (jujur tandain "update tertunda")
+  const ofsStale = ofsReady && !!ofs?.fallback;
 
   return (
     <div data-theme={theme} style={{ position: "absolute", inset: 0 }}>
