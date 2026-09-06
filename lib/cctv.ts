@@ -81,8 +81,10 @@ export const CAMS: Cam[] = [
   { slug: "batuaji", name: "Depan SP Plaza Batu Aji", area: "Batu Aji", lat: 1.042239, lng: 103.982872 },
 
   // — Nongsa —
-  { slug: "sambau1", name: "Pertigaan Sambau 1", area: "Nongsa", lat: 1.154257, lng: 104.100716, approx: true },
-  { slug: "sambau2", name: "Pertigaan Sambau 2", area: "Nongsa", lat: 1.154757, lng: 104.100716, approx: true },
+  // Titik dipastikan manual (2026-09-07). Dulu pakai centroid kelurahan Sambau
+  // (1.154257, 104.100716) — meleset ~1,9 km. Dua kamera ini satu pertigaan.
+  { slug: "sambau1", name: "Pertigaan Sambau 1", area: "Nongsa", lat: 1.166793, lng: 104.112627 },
+  { slug: "sambau2", name: "Pertigaan Sambau 2", area: "Nongsa", lat: 1.166793, lng: 104.112627 },
   { slug: "punggur1", name: "Pelabuhan Punggur", area: "Nongsa", lat: 1.034618, lng: 104.132155 },
 
   // — Titik dipastikan manual lewat Google Maps (2026-09-07) —
