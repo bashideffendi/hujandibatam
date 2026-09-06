@@ -82,8 +82,9 @@ export function timeBasedTheme(): ThemeMode {
   return wibHour >= 6 && wibHour < 18 ? "light" : "dark";
 }
 
-// Mode tampilan: HUJAN (radar) vs OMBAK (field gelombang OFS BMKG).
-export type Mode = "hujan" | "ombak";
+// Mode tampilan: HUJAN (radar) · OMBAK (field gelombang OFS BMKG) · CCTV
+// (kamera Batam sebagai verifikasi visual radar — lihat lib/cctv.ts).
+export type Mode = "hujan" | "ombak" | "cctv";
 
 // ---------------------------------------------------------------------------
 // OFS BMKG: field gelombang KONTINU (WAVEWATCH III hi-res "w3g_hires", param swh =

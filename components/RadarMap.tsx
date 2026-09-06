@@ -29,7 +29,7 @@ import {
   type ThemeMode,
   type ViewKey,
 } from "@/lib/radar";
-import { UNMAPPED_CAMS, type Cam } from "@/lib/cctv";
+import { CAMS, UNMAPPED_CAMS, type Cam } from "@/lib/cctv";
 import IosInstallHint from "./IosInstallHint";
 import LandMask from "./LandMask";
 import CctvLayer from "./CctvLayer";
@@ -40,7 +40,6 @@ const PLAY_MS = 650;
 const OFS_PLAY_MS = 1100; // animasi timeline gelombang lebih pelan dari radar
 const THEME_KEY = "hujan-theme";
 const MODE_KEY = "hujan-mode";
-const CAMS_KEY = "hujan-cams";
 
 // Gradien legend OFS (colormap swh resmi BMKG, 0–7 m) — string CSS dibikin sekali.
 const OFS_GRADIENT = `linear-gradient(to right, ${OFS_SWH_COLORS.map(
@@ -170,23 +169,16 @@ export default function RadarMap() {
   // (idx/opacity) terpisah dari radar biar balik mode posisi masing-masing tetap.
   const [mode, setMode] = useState<Mode>(() => {
     try {
-      return localStorage.getItem(MODE_KEY) === "ombak" ? "ombak" : "hujan";
+      const s = localStorage.getItem(MODE_KEY);
+      if (s === "ombak" || s === "cctv") return s;
     } catch {
-      return "hujan";
+      /* abaikan */
     }
+    return "hujan";
   });
   const [ofs, setOfs] = useState<OfsData | null>(null);
   const [ofsIdx, setOfsIdx] = useState(0);
 
-  // Pin CCTV Batam (verifikasi visual radar). Default MATI: pin sendiri gratis,
-  // tapi kita nggak mau ngajak orang buka stream tanpa sadar — lihat lib/cctv.ts.
-  const [showCams, setShowCams] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem(CAMS_KEY) === "1";
-    } catch {
-      return false;
-    }
-  });
   // Kamera yang lagi diputar. null = nggak ada stream jalan sama sekali.
   const [activeCam, setActiveCam] = useState<Cam | null>(null);
 
@@ -303,17 +295,9 @@ export default function RadarMap() {
     }
   }, [mode]);
 
+  // Keluar dari mode CCTV = matikan stream yang lagi jalan.
   useEffect(() => {
-    try {
-      localStorage.setItem(CAMS_KEY, showCams ? "1" : "0");
-    } catch {
-      /* abaikan */
-    }
-  }, [showCams]);
-
-  // Pin CCTV cuma ada di mode HUJAN → begitu pindah ke OMBAK, matikan streamnya.
-  useEffect(() => {
-    if (mode !== "hujan") setActiveCam(null);
+    if (mode !== "cctv") setActiveCam(null);
   }, [mode]);
 
   // App balik kelihatan (reopen PWA / balik ke tab / restore dari bfcache) -> fetch
@@ -422,10 +406,12 @@ export default function RadarMap() {
   function switchMode(next: Mode) {
     if (next === mode) return;
     setPlaying(false);
-    if (next === "hujan") {
+    if (next !== "ombak") {
       ofsManualRef.current = false; // keluar ombak → boleh auto-realign frame lagi
       if (view === "natuna") setView("regional"); // view "Natuna" cuma valid di mode ombak
     }
+    // Semua kamera ada di Pulau Batam → frame-nya percuma kalau lagi zoom regional.
+    if (next === "cctv") setView("batam");
     setMode(next);
   }
 
@@ -496,7 +482,7 @@ export default function RadarMap() {
             />
           </Pane>
         )}
-        {mode === "hujan" &&
+        {mode !== "ombak" &&
           PLACES.map((p) => (
             <CircleMarker
               key={p.name}
@@ -509,7 +495,7 @@ export default function RadarMap() {
               </Tooltip>
             </CircleMarker>
           ))}
-        {mode === "hujan" && showCams && <CctvLayer onPick={setActiveCam} />}
+        {mode === "cctv" && <CctvLayer onPick={setActiveCam} />}
         <MapController view={view} getPadding={getPadding} collapsed={collapsed} mode={mode} />
       </MapContainer>
 
@@ -555,26 +541,9 @@ export default function RadarMap() {
               <span className="dot" /> Prakiraan
             </span>
           ) : (
-            <span className="live-pill" data-stale={stale ? "" : undefined}>
-              <span className="dot" /> {stale ? "Tertunda" : "Langsung"}
+            <span className="live-pill" data-stale={mode === "hujan" && stale ? "" : undefined}>
+              <span className="dot" /> {mode === "hujan" && stale ? "Tertunda" : "Langsung"}
             </span>
-          )}
-          {mode === "hujan" && (
-            <button
-              className="theme-toggle"
-              onClick={() => {
-                setShowCams((s) => {
-                  if (s) setActiveCam(null); // matikan pin = matikan stream
-                  return !s;
-                });
-              }}
-              aria-pressed={showCams}
-              aria-label={showCams ? "Sembunyikan kamera CCTV" : "Tampilkan kamera CCTV"}
-              title={showCams ? "Sembunyikan kamera" : "Tampilkan kamera CCTV Batam"}
-              style={showCams ? { color: "var(--accent)", borderColor: "var(--accent)" } : undefined}
-            >
-              {IconCam}
-            </button>
           )}
           <button
             className="theme-toggle"
@@ -671,6 +640,20 @@ export default function RadarMap() {
               <div className="state">
                 <span className="d" style={{ background: "var(--text-dim)" }} />
                 {ofsError ? "Gangguan" : ofsIsNow ? "Sekarang" : "Prakiraan"}
+              </div>
+            </>
+          ) : mode === "cctv" ? (
+            <>
+              <div>
+                <div className="time">
+                  {CAMS.length}
+                  <span className="wib">KAMERA</span>
+                </div>
+                <div className="date">Pantauan langsung Kota Batam</div>
+              </div>
+              <div className="state">
+                <span className="d" style={{ background: "var(--live-dot)" }} />
+                Langsung
               </div>
             </>
           ) : (
@@ -774,7 +757,11 @@ export default function RadarMap() {
 
         {/* Kamera yang belum punya koordinat terverifikasi: sengaja nggak dipasang
             sebagai pin (biar nggak nyesatin), tapi tetap bisa dibuka dari sini. */}
-        {mode === "hujan" && showCams && UNMAPPED_CAMS.length > 0 && (
+        {mode === "cctv" && (
+          <div className="cam-hint">Ketuk pin kamera di peta buat lihat siarannya.</div>
+        )}
+
+        {mode === "cctv" && UNMAPPED_CAMS.length > 0 && (
           <div className="cam-extra">
             <span className="cam-extra-lab">Kamera lain (titik belum dipetakan)</span>
             {UNMAPPED_CAMS.map((c) => (
@@ -817,8 +804,29 @@ export default function RadarMap() {
             </svg>
             Ombak
           </button>
+          <button
+            className={`mode-btn ${mode === "cctv" ? "active" : ""}`}
+            onClick={() => switchMode("cctv")}
+            aria-pressed={mode === "cctv"}
+          >
+            <svg
+              className="mode-ico"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.8}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h6A2.5 2.5 0 0 1 14 8.5v7A2.5 2.5 0 0 1 11.5 18h-6A2.5 2.5 0 0 1 3 15.5Z" />
+              <path d="M14 10.5 21 7v10l-7-3.5Z" />
+            </svg>
+            CCTV
+          </button>
         </div>
 
+        {mode !== "cctv" && (
         <div
           className="segmented"
           role="group"
@@ -837,7 +845,9 @@ export default function RadarMap() {
             </button>
           ))}
         </div>
+        )}
 
+        {mode !== "cctv" && (
         <div className="transport">
           <button
             className="play"
@@ -883,7 +893,9 @@ export default function RadarMap() {
             }}
           />
         </div>
+        )}
 
+        {mode !== "cctv" && (
         <div className="meta">
           {mode === "ombak" ? (
             <div className="ofs-legend">
@@ -922,6 +934,7 @@ export default function RadarMap() {
             </>
           )}
         </div>
+        )}
 
         <div className="credit">
           Radar:{" "}

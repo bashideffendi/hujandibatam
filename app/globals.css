@@ -475,8 +475,8 @@ input[type="range"].rng::-moz-range-thumb {
 /* ===== mode OMBAK: toggle Hujan/Ombak + legend kategori + popup area ===== */
 .mode-switch {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
   margin-bottom: 9px;
 }
 .mode-btn {
@@ -1094,4 +1094,13 @@ input[type="range"].rng::-moz-range-thumb {
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.14);
   border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+/* Petunjuk singkat di mode CCTV. */
+.cam-hint {
+  margin-top: 8px;
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--text-muted);
 }
