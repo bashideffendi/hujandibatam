@@ -14,10 +14,15 @@ import { CCTV_CREDIT, streamUrl, type Cam } from "@/lib/cctv";
 
 type Props = { cam: Cam; onClose: () => void };
 
+// "blocked" = data kamera SEHAT tapi browser nolak autoplay (butuh gestur user).
+// Ini BUKAN error — jangan disamakan, dulu sempat kejadian streamnya jalan tapi
+// UI-nya bilang "nggak bisa diakses" cuma gara-gara play() ditolak.
+type State = "loading" | "playing" | "blocked" | "error";
+
 export default function CctvPlayer({ cam, onClose }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
-  const [state, setState] = useState<"loading" | "playing" | "error">("loading");
+  const [state, setState] = useState<State>("loading");
 
   // Esc buat nutup + fokus awal ke tombol tutup (a11y).
   useEffect(() => {
@@ -37,22 +42,26 @@ export default function CctvPlayer({ cam, onClose }: Props) {
     let cancelled = false;
 
     const onPlaying = () => setState("playing");
+    const onPause = () => setState((s) => (s === "playing" ? "blocked" : s));
+    // Cuma error kalau elemen video BENERAN lapor error, bukan sekadar pause.
     const onErr = () => setState("error");
     video.addEventListener("playing", onPlaying);
+    video.addEventListener("pause", onPause);
     video.addEventListener("error", onErr);
 
-    // Safari/iOS: HLS native, nggak perlu library sama sekali.
-    if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      video.src = url;
-      video.play().catch(() => setState("error"));
-    } else {
-      // Chrome/Firefox: hls.js di-import dinamis biar nggak nambah bundle awal.
-      import("hls.js")
-        .then(({ default: Hls }) => {
-          if (cancelled || !Hls.isSupported()) {
-            if (!cancelled) setState("error");
-            return;
-          }
+    // play() ditolak (kebijakan autoplay) BUKAN kegagalan stream — tampilkan
+    // tombol putar, biar user tinggal ketuk sekali.
+    const tryPlay = () => video.play().catch(() => setState("blocked"));
+
+    // Urutan penting: hls.js DULU, native belakangan.
+    // Chromium jawab canPlayType("application/vnd.apple.mpegurl") = "maybe"
+    // padahal pemutaran HLS-nya nggak andal — kalau native didahulukan, stream
+    // ke-buffer tapi nyangkut. Native cuma dipakai kalau MSE nggak ada
+    // (iOS Safari), dan di sana native memang jalur yang benar.
+    import("hls.js")
+      .then(({ default: Hls }) => {
+        if (cancelled) return;
+        if (Hls.isSupported()) {
           const h = new Hls({ lowLatencyMode: false, backBufferLength: 10 });
           hls = h;
           h.on(Hls.Events.ERROR, (_e, data) => {
@@ -60,17 +69,30 @@ export default function CctvPlayer({ cam, onClose }: Props) {
           });
           h.loadSource(url);
           h.attachMedia(video);
-          h.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
-        })
-        .catch(() => {
-          if (!cancelled) setState("error");
-        });
-    }
+          h.on(Hls.Events.MANIFEST_PARSED, tryPlay);
+        } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+          video.src = url;
+          tryPlay();
+        } else {
+          setState("error");
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Modul gagal dimuat → masih ada peluang lewat native.
+        if (video.canPlayType("application/vnd.apple.mpegurl")) {
+          video.src = url;
+          tryPlay();
+        } else {
+          setState("error");
+        }
+      });
 
     // Bongkar total pas ditutup — ini yang bikin tarikan ke server sumber berhenti.
     return () => {
       cancelled = true;
       video.removeEventListener("playing", onPlaying);
+      video.removeEventListener("pause", onPause);
       video.removeEventListener("error", onErr);
       try {
         hls?.destroy();
@@ -114,12 +136,24 @@ export default function CctvPlayer({ cam, onClose }: Props) {
             playsInline
             muted
             autoPlay
+            controls
             preload="none"
           />
-          {state !== "playing" && (
-            <div className="cctv-overlay">
-              {state === "loading" ? "Menyambung ke kamera…" : "Kamera lagi nggak bisa diakses"}
-            </div>
+          {state === "loading" && <div className="cctv-overlay">Menyambung ke kamera…</div>}
+          {state === "error" && (
+            <div className="cctv-overlay">Kamera lagi nggak bisa diakses</div>
+          )}
+          {state === "blocked" && (
+            <button
+              className="cctv-overlay cctv-play"
+              onClick={() => videoRef.current?.play().catch(() => setState("error"))}
+              aria-label="Putar kamera"
+            >
+              <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                <path d="M8 5v14l11-7z" />
+              </svg>
+              Ketuk untuk memutar
+            </button>
           )}
         </div>
 
