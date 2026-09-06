@@ -879,18 +879,22 @@ input[type="range"].rng::-moz-range-thumb {
 }
 
 /* ===== CCTV: pin kamera + pemutar (satu stream, on-demand) ===== */
+/* Pin kamera: isian SOLID warna aksen + halo kontras.
+   Jangan pakai --ctl-bg (putih transparan) — di basemap Positron yang juga
+   nyaris putih, pin-nya hilang nyaru sama daratan. */
 .cam-pin {
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  background: var(--ctl-bg);
-  border: 1px solid var(--ctl-border);
-  color: var(--accent);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  background: var(--cam-pin-bg);
+  color: var(--cam-pin-fg);
+  border: 0;
+  box-shadow:
+    0 0 0 2px var(--cam-pin-ring),
+    0 2px 6px rgba(0, 0, 0, 0.35);
   cursor: pointer;
-  backdrop-filter: blur(6px);
   transition: transform 0.14s ease;
 }
 .cam-pin:hover,
@@ -898,8 +902,8 @@ input[type="range"].rng::-moz-range-thumb {
   transform: scale(1.18);
 }
 .cam-pin svg {
-  width: 12px;
-  height: 12px;
+  width: 13px;
+  height: 13px;
 }
 .leaflet-tooltip.cam-label {
   background: transparent;
@@ -1103,4 +1107,18 @@ input[type="range"].rng::-moz-range-thumb {
   font-weight: 500;
   line-height: 1.5;
   color: var(--text-muted);
+}
+
+/* Token pin kamera — didefinisikan per tema biar kontras di dua-duanya:
+   terang = biru pekat + glyph putih di atas daratan pucat;
+   gelap  = biru muda + glyph tinta gelap di atas daratan near-black. */
+[data-theme="light"] {
+  --cam-pin-bg: #2f6fb3;
+  --cam-pin-fg: #ffffff;
+  --cam-pin-ring: rgba(255, 255, 255, 0.92);
+}
+[data-theme="dark"] {
+  --cam-pin-bg: #6ea2dd;
+  --cam-pin-fg: #0c0d10;
+  --cam-pin-ring: rgba(0, 0, 0, 0.55);
 }

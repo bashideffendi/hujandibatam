@@ -22,9 +22,12 @@
 //   - precision "exact"  = ketemu POI bernama yang persis cocok;
 //   - precision "approx" = jatuh ke titik acuan terdekat / centroid kelurahan,
 //                          bisa meleset ratusan meter — ditandai di UI;
-//   - tanpa lat/lng      = belum ketemu acuan yang bisa dipertanggungjawabkan,
-//                          sengaja TIDAK dipasang sebagai pin (muncul di daftar
-//                          terpisah) daripada ditaruh di titik karangan.
+//   - dipastikan manual  = 3 titik yang nggak ada di OSM, dicek satu-satu di
+//                          Google Maps (2026-09-07) lalu di-cross-check plus code
+//                          vs koordinat hasil resolve tautan — cocok ~1 m.
+// Beberapa kamera memang berbagi satu titik (dua kamera di simpang yang sama,
+// beda arah hadap). Itu DISENGAJA — pin-nya dikipas otomatis pas render biar
+// dua-duanya tetap bisa diklik; datanya tetap titik aslinya. Lihat CctvLayer.
 // ---------------------------------------------------------------------------
 
 export type Cam = {
@@ -82,12 +85,16 @@ export const CAMS: Cam[] = [
   { slug: "sambau2", name: "Pertigaan Sambau 2", area: "Nongsa", lat: 1.154757, lng: 104.100716, approx: true },
   { slug: "punggur1", name: "Pelabuhan Punggur", area: "Nongsa", lat: 1.034618, lng: 104.132155 },
 
-  // — Belum ketemu acuan koordinat yang bisa dipertanggungjawabkan —
-  { slug: "engkuhamidah1", name: "Engku Hamidah", area: "Batam Kota" },
-  { slug: "danganom1", name: "Taman Dang Anom", area: "Batam Kota" },
-  { slug: "danganom3", name: "Taman Dang Anom arah Jalan", area: "Batam Kota" },
-  { slug: "batuajidamkar1", name: "Depan Stadion Temenggung", area: "Batu Aji" },
-  { slug: "batuajidamkar3", name: "Depan Stadion Temenggung arah Batu Aji", area: "Batu Aji" },
+  // — Titik dipastikan manual lewat Google Maps (2026-09-07) —
+  // Ketiganya nggak ketemu di Nominatim/Overpass, jadi diverifikasi di lapangan-peta.
+  { slug: "engkuhamidah1", name: "Engku Hamidah", area: "Batam Kota", lat: 1.125114, lng: 104.026894 },
+  { slug: "danganom1", name: "Taman Dang Anom", area: "Batam Kota", lat: 1.121378, lng: 104.019885 },
+  { slug: "danganom3", name: "Taman Dang Anom arah Jalan", area: "Batam Kota", lat: 1.121378, lng: 104.019885 },
+  // CATATAN: slug bilang "batuaji" tapi lokasinya BUKAN Kec. Batu Aji. "damkar" =
+  // pemadam kebakaran, dan kantornya ada di Duriangkang, Sukajadi, Kec. Batam Kota
+  // (persis di sebelah Stadion Temenggung). "arah Batu Aji" di nama = arah hadap.
+  { slug: "batuajidamkar1", name: "Depan Stadion Temenggung", area: "Sukajadi", lat: 1.088491, lng: 104.033566 },
+  { slug: "batuajidamkar3", name: "Depan Stadion Temenggung arah Batu Aji", area: "Sukajadi", lat: 1.088491, lng: 104.033566 },
 ];
 
 /** Kamera yang punya koordinat → dipasang sebagai pin di peta. */
