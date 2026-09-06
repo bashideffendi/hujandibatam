@@ -13,7 +13,10 @@ const PIN_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
 // arah hadap) → pin-nya bakal saling numpuk dan cuma yang teratas bisa diklik.
 // Solusinya dikipas SAAT RENDER, bukan dengan mengarang koordinat di data:
 // tiap anggota grup digeser ~35 m mengelilingi titik aslinya.
-const FAN_RADIUS = 0.00032; // derajat (~35 m di ekuator)
+// ~45 m. Bukan angka asal: dua kamera di satu simpang memang biasanya kepasang
+// di tiang yang beda sudut, jadi jarak segini masuk akal secara fisik. Sengaja
+// nggak lebih kecil — di bawah ini pin baru kepisah pas zoom mentok.
+const FAN_RADIUS = 0.0004;
 
 function fanOut(cams: Cam[]): { cam: Cam; pos: [number, number] }[] {
   const groups = new Map<string, Cam[]>();

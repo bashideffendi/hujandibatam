@@ -14,6 +14,7 @@ import {
 import {
   DEFAULT_VIEW,
   LEGEND,
+  CCTV_MAX_ZOOM,
   MAX_ZOOM,
   MIN_ZOOM,
   OFS_SWH_COLORS,
@@ -66,10 +67,14 @@ function MapController({
   const viewRef = useRef(view);
   viewRef.current = view;
 
-  // Mode OMBAK: izinkan zoom-out lebih jauh (gak ada radar yg pecah) biar field laut
-  // jauh (Natuna/Anambas) keliatan utuh. Mode HUJAN tetap dikunci ke jangkauan radar.
+  // Batas zoom per mode:
+  //  - OMBAK: zoom-out lebih jauh (gak ada radar yg pecah) biar field laut jauh
+  //    (Natuna/Anambas) keliatan utuh;
+  //  - CCTV: zoom-in lebih dalam, biar pin yang berdempet bisa dipisah & diklik.
+  // Keluar dari CCTV, Leaflet otomatis nge-clamp balik ke MAX_ZOOM.
   useEffect(() => {
     map.setMinZoom(mode === "ombak" ? 5 : MIN_ZOOM);
+    map.setMaxZoom(mode === "cctv" ? CCTV_MAX_ZOOM : MAX_ZOOM);
   }, [mode, map]);
 
   // view berubah (+ mount): fit/terbang ke wilayah
@@ -758,7 +763,10 @@ export default function RadarMap() {
         {/* Kamera yang belum punya koordinat terverifikasi: sengaja nggak dipasang
             sebagai pin (biar nggak nyesatin), tapi tetap bisa dibuka dari sini. */}
         {mode === "cctv" && (
-          <div className="cam-hint">Ketuk pin kamera di peta buat lihat siarannya.</div>
+          <div className="cam-hint">
+            Ketuk pin kamera di peta buat lihat siarannya. Ada beberapa simpang yang
+            kameranya dua — perbesar peta buat misahin pin yang berdempet.
+          </div>
         )}
 
         {mode === "cctv" && UNMAPPED_CAMS.length > 0 && (

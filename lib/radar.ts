@@ -32,6 +32,10 @@ export const RADAR_BOUNDS: [[number, number], [number, number]] = [
 
 export const MIN_ZOOM = 7;
 export const MAX_ZOOM = 12; // dikunci: lebih dari ini radar (1 km/px) mulai pecah
+// Mode CCTV nggak punya overlay radar, jadi batas 12 di atas nggak relevan di sana.
+// Perlu zoom dalam biar pin kamera yang berdempet (beberapa kamera satu simpang)
+// bisa dipisah dan diklik satu-satu. Basemap CARTO sanggup sampai 20.
+export const CCTV_MAX_ZOOM = 18;
 
 // 3 preset view — pakai bounding box wilayah asli (bukan center/zoom tebakan).
 // bounds = [[south, west], [north, east]].
