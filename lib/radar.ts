@@ -55,10 +55,19 @@ export const VIEWS: Record<
 };
 export const DEFAULT_VIEW: ViewKey = "batam";
 
+// CARTO basemap raster WAJIB API key sejak 2026-09 (dulu gratis tanpa key → muncul
+// watermark "API KEY REQUIRED"). Key ditaruh di env NEXT_PUBLIC_CARTO_KEY (repo PUBLIC →
+// JANGAN hardcode); dilindungi restriksi Referer di dashboard.basemaps.carto.com → walau key
+// keliatan di client (wajib, tile ditarik browser), cuma domain kita yang dilayani. Gratis
+// s/d 5 juta tile/bulan. Env kosong → tanpa key (watermark, tapi peta tetap muncul; gak crash).
+export const CARTO_KEY = process.env.NEXT_PUBLIC_CARTO_KEY
+  ? `?key=${process.env.NEXT_PUBLIC_CARTO_KEY}`
+  : "";
+
 // Basemap per tema (CARTO) — minimalis biar radar pop & kesan elegant.
 export const TILES: Record<ThemeMode, string> = {
-  light: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", // Positron
-  dark: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", // Dark Matter
+  light: `https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png${CARTO_KEY}`, // Positron
+  dark: `https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png${CARTO_KEY}`, // Dark Matter
 };
 
 // Penanda kota buat orientasi.

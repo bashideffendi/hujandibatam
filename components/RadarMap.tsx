@@ -15,6 +15,7 @@ import {
   DEFAULT_VIEW,
   LEGEND,
   CCTV_MAX_ZOOM,
+  CARTO_KEY,
   MAX_ZOOM,
   MIN_ZOOM,
   OFS_SWH_COLORS,
@@ -481,7 +482,7 @@ export default function RadarMap() {
             <TileLayer
               url={`https://{s}.basemaps.cartocdn.com/${
                 theme === "dark" ? "dark_only_labels" : "light_only_labels"
-              }/{z}/{x}/{y}{r}.png`}
+              }/{z}/{x}/{y}{r}.png${CARTO_KEY}`}
               subdomains={["a", "b", "c", "d"]}
               maxZoom={20}
             />
