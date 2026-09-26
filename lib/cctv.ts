@@ -8,13 +8,20 @@
 // bilang ada echo di Batam Center, buka kamera, lihat jalannya basah atau nggak.
 //
 // DISIPLIN BANDWIDTH (jangan dilanggar)
-// Satu segmen HLS ≈ 2,7 MB / 9,6 detik → ~2,3 Mbit/s, atau ~1 GB per jam per
+// Satu segmen HLS ≈ 3 MB / 10 detik → ~2,4 Mbit/s, atau ~1 GB per jam per
 // penonton. Yang nanggung server sumber, bukan server kita. Makanya:
-//   - nggak ada grid, nggak ada autoplay, nggak ada prefetch/preload;
+//   - nggak ada grid, nggak ada autoplay, nggak ada prefetch SEGMEN video;
+//   - boleh: SATU playlist teks (~250 B) kamera yang sedang dibuka, buat ngecek
+//     kameranya hidup sebelum player narik video (lihat checkCam);
 //   - cuma SATU stream hidup dalam satu waktu, dan cuma sesudah user klik pin;
-//   - player wajib di-destroy pas ditutup (lihat components/CctvPlayer.tsx).
+//   - player wajib di-destroy pas ditutup + berhenti narik saat tab disembunyikan
+//     (lihat components/CctvPlayer.tsx).
 // Kalau nanti mau bikin mode "tembok kamera", jangan — itu bakal mukul server
 // instansi yang nggak pernah setuju jadi CDN kita.
+//
+// ARMADA SERING MATI (dicek 2026-09-26: 13 hidup, 14 mati ENDLIST, 1 beku sejak Jun)
+// Statusnya berubah-ubah (sambau1 mati 19 Sep, hidup lagi 26 Sep), jadi JANGAN
+// di-hardcode — dicek saat kamera dibuka. Audit ulang: scripts/cctv-audit.sh.
 //
 // CATATAN KOORDINAT
 // Sumbernya NGGAK menyediakan lat/lng sama sekali. Titik di bawah hasil
@@ -29,6 +36,7 @@
 // beda arah hadap). Itu DISENGAJA — pin-nya dikipas otomatis pas render biar
 // dua-duanya tetap bisa diklik; datanya tetap titik aslinya. Lihat CctvLayer.
 // ---------------------------------------------------------------------------
+import { CCTV_HOST } from "./sources";
 
 export type Cam = {
   slug: string;
@@ -43,13 +51,63 @@ export type Cam = {
 /** Kredit sumber. Ganti/kosongkan di sini kalau kebijakannya berubah. */
 export const CCTV_CREDIT = "CCTV Pemerintah Kota Batam";
 
-/**
- * Host sumber. Catatan jujur: hostname ini tetap kelihatan siapa pun yang buka
- * tab Network di browser — nggak ada cara menyembunyikannya dari sisi klien.
- */
-const CCTV_HOST = "https://matanya.batam.go.id";
-
+export { CCTV_HOST };
 export const streamUrl = (slug: string) => `${CCTV_HOST}/cctv/${slug}/stream.m3u8`;
+
+/** Perkiraan konsumsi data siaran (3 MB / 10 dtk) — ditampilkan jujur ke pengguna. */
+export const CCTV_MB_PER_MIN = 20;
+
+export type CamCheck = {
+  /**
+   * ok     = playlist hidup & segar
+   * mati   = playlist ditutup (#EXT-X-ENDLIST) — server berhenti menyiarkan
+   * beku   = playlist tidak di-update > 10 menit (rekaman lama akan diputar sebagai "Langsung")
+   * hilang = 404
+   * server = 5xx (gangguan di server sumber; kamera belum tentu mati)
+   * diam   = timeout / offline — TIDAK memvonis kamera
+   */
+  verdict: "ok" | "mati" | "beku" | "hilang" | "server" | "diam";
+  /** Last-Modified playlist (ms epoch) kalau ada. */
+  lastSeen: number | null;
+};
+
+const FROZEN_MS = 10 * 60 * 1000;
+
+/**
+ * Cek kesehatan kamera dari playlist-nya SEBELUM player menarik video: satu GET
+ * ~250 B. Semua vonis di sini pasti (ENDLIST) atau pakai toleransi longgar
+ * (Last-Modified vs jam HP, 10 menit) — kamera beku di data nyata tertinggal
+ * berhari-hari sampai berbulan-bulan.
+ */
+export async function checkCam(slug: string, signal?: AbortSignal): Promise<CamCheck> {
+  try {
+    const res = await fetch(streamUrl(slug), { cache: "no-store", signal });
+    if (res.status === 404) return { verdict: "hilang", lastSeen: null };
+    if (res.status >= 500) return { verdict: "server", lastSeen: null };
+    if (!res.ok) return { verdict: "diam", lastSeen: null };
+    const text = await res.text();
+    const lm = res.headers.get("last-modified");
+    const parsed = lm ? Date.parse(lm) : NaN;
+    const lastSeen = Number.isNaN(parsed) ? null : parsed;
+    if (text.includes("#EXT-X-ENDLIST")) return { verdict: "mati", lastSeen };
+    if (lastSeen !== null && Date.now() - lastSeen > FROZEN_MS) return { verdict: "beku", lastSeen };
+    return { verdict: "ok", lastSeen };
+  } catch {
+    return { verdict: "diam", lastSeen: null };
+  }
+}
+
+// hls.js "light" (tanpa subtitle/EME/CMCD/alt-audio) cukup untuk stream TS polos
+// Pemko — ±34% lebih kecil dari build penuh. Dimuat sekali, dibagi RadarMap
+// (pemanasan saat masuk mode CCTV) dan CctvPlayer.
+let hlsPromise: Promise<typeof import("hls.js/light")> | null = null;
+export function loadHls() {
+  hlsPromise ??= import("hls.js/light").catch((e) => {
+    hlsPromise = null;
+    throw e;
+  });
+  return hlsPromise;
+}
 
 export const CAMS: Cam[] = [
   // — Batam Kota / pusat pemerintahan —
@@ -73,7 +131,9 @@ export const CAMS: Cam[] = [
   { slug: "seiladi2", name: "Simpang Sei Ladi", area: "Sekupang", lat: 1.108161, lng: 104.011206, approx: true },
   { slug: "pura1", name: "Depan Pura Sei Ladi", area: "Sekupang", lat: 1.108161, lng: 104.011206, approx: true },
   { slug: "matakucing1", name: "Mata Kucing", area: "Sekupang", lat: 1.085136, lng: 103.971603, approx: true },
-  { slug: "delta2", name: "Depan Delta Villa arah Mata Kucing", area: "Sekupang", lat: 1.102452, lng: 103.960683 },
+  // Titik = centroid perumahan Delta Villa (reverse-geocode), ±240 m dari jalan yang
+  // difilmkan (Jl. Pangeran Diponegoro) → ditandai perkiraan (audit 2026-09).
+  { slug: "delta2", name: "Depan Delta Villa arah Mata Kucing", area: "Sekupang", lat: 1.102452, lng: 103.960683, approx: true },
   { slug: "southlink1", name: "Tanjakan Southlink", area: "Tiban", lat: 1.113720, lng: 103.996030, approx: true },
   { slug: "ptzsouthlink", name: "Tanjakan Southlink (PTZ)", area: "Tiban", lat: 1.114200, lng: 103.996030, approx: true },
 
@@ -104,3 +164,6 @@ export const MAPPED_CAMS = CAMS.filter((c) => c.lat != null && c.lng != null);
 
 /** Kamera tanpa koordinat → daftar chip di panel, tetap bisa dibuka. */
 export const UNMAPPED_CAMS = CAMS.filter((c) => c.lat == null || c.lng == null);
+
+export const findCam = (slug: string | null | undefined) =>
+  slug ? CAMS.find((c) => c.slug === slug) ?? null : null;

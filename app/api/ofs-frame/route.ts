@@ -1,26 +1,31 @@
 // Frame field gelombang OFS BMKG (WAVEWATCH III hi-res "w3g_hires", param swh).
-// force-dynamic + no-store: baserun & nowIndex tergantung "sekarang".
 //
-// RESILIENSI: modelrun BMKG (peta-maritim, Cloudflare) suka MEMBLOKIR fetch server-side.
-// Strategi berlapis:
-//  1) coba modelrun (paling fresh & akurat kalau gak keblok);
-//  2) kalau gagal → PROBE tile langsung buat nemu run TERBARU yg tile-nya beneran ADA
-//     (mundur 12 jam kalau run terbaru belum terbit) — tile lebih longgar dari modelrun;
-//  3) kalau probe juga keblok → slot buta 00/12 UTC ≥15h lalu (last resort).
-// Hasil probe di-cache 10 mnt (module-level) biar gak hajar BMKG tiap request.
+// RESILIENSI: modelrun BMKG (Cloudflare) suka MEMBLOKIR fetch server-side. Strategi berlapis:
+//  1) modelrun (paling fresh & akurat) — hasilnya di-cache 5 menit (run cuma ganti tiap 12 jam);
+//  2) gagal → PROBE tile langsung buat nemu run TERBARU yang tile-nya beneran ADA — cache 10 mnt;
+//  3) probe pun keblok → slot buta 00/12 UTC ≥15h lalu, cache cuma 60 detik (tebakan, bukan bukti).
+// Request paralel berbagi SATU promise in-flight biar BMKG nggak dihajar.
+// Respons kasih `source`, `ageH`, `expired` — klien yang memutuskan label jujurnya.
+import type { OfsResponse } from "@/lib/api-types";
+import { OFS_MODELRUN, OFS_REFERER, ofsTilePath } from "@/lib/sources";
+
 export const dynamic = "force-dynamic";
 export const maxDuration = 20;
 
-const HOST = "https://peta-maritim.bmkg.go.id";
 const STEP_H = 3;
 const HORIZON_H = 72;
 const SAFE_LAG_H = 15;
+const MODELRUN_TTL_MS = 5 * 60 * 1000;
+const PROBE_TTL_MS = 10 * 60 * 1000;
+const BLIND_TTL_MS = 60 * 1000;
 const BROWSER_HEADERS = {
   "User-Agent":
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
   Accept: "*/*",
-  Referer: "https://peta-maritim.bmkg.go.id/ofs",
+  Referer: OFS_REFERER,
 };
+
+type Source = OfsResponse["source"];
 
 function fmt(d: Date): string {
   const p = (n: number) => String(n).padStart(2, "0");
@@ -36,62 +41,79 @@ function slotFloor(ms: number): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), slot, 0, 0));
 }
 
-// Cek run punya tile? (1 tile Batam z7/100/64 valid=base+6h; Batam pasti punya data laut)
+// Cek run punya tile? Path tile PERSIS sama dengan yang dipakai klien (lib/sources.ts).
 async function runHasTiles(base: Date): Promise<boolean> {
   const valid = fmt(new Date(base.getTime() + 6 * 3600 * 1000));
-  const url = `${HOST}/api21/mpl_req/w3g_hires/swh/0/${fmt(base)}/${valid}/7/100/64.png?ci=1&overlays=,contourf&conc=snow`;
   try {
-    const r = await fetch(url, {
+    const r = await fetch(ofsTilePath(fmt(base), valid, 7, 100, 64), {
       cache: "no-store",
+      redirect: "manual", // kalau BMKG pindah host lagi, ketahuan di log (bukan diam-diam ikut 301)
       signal: AbortSignal.timeout(2000),
       headers: BROWSER_HEADERS,
     });
+    if (r.status >= 300 && r.status < 400) console.warn("[ofs] tile redirect →", r.headers.get("location"));
     return r.ok && (r.headers.get("content-type") ?? "").includes("image");
   } catch {
     return false;
   }
 }
 
-let fbCache: { base: Date; at: number } | null = null;
-async function resolveFallback(): Promise<Date> {
-  if (fbCache && Date.now() - fbCache.at < 10 * 60 * 1000) return fbCache.base;
-  const now = Date.now();
-  let found: Date | null = null;
-  // kandidat run TERBARU dulu: slot ~4h, ~16h, ~28h lalu (3 slot 12-jaman terbaru)
-  for (let i = 0; i < 3; i++) {
-    const cand = slotFloor(now - (4 + i * 12) * 3600 * 1000);
-    if (await runHasTiles(cand)) {
-      found = cand;
-      break;
-    }
-  }
-  // probe pun keblok → slot buta ≥15h (tile-nya biasanya tetap kemuat di browser)
-  const base = found ?? slotFloor(now - SAFE_LAG_H * 3600 * 1000);
-  fbCache = { base, at: Date.now() };
-  return base;
-}
-
-export async function GET() {
-  let base: Date | null = null;
+async function fetchModelrun(): Promise<Date | null> {
   try {
-    const res = await fetch(`${HOST}/api21/modelrun`, {
+    const res = await fetch(OFS_MODELRUN, {
       cache: "no-store",
       signal: AbortSignal.timeout(3000),
       headers: BROWSER_HEADERS,
     });
+    if (!res.ok) return null;
     const j = await res.json();
     const baseIso: string | undefined = j?.w3g_hires?.[0];
-    if (baseIso) {
-      const d = new Date(baseIso);
-      if (!Number.isNaN(d.getTime())) base = d;
-    }
+    if (!baseIso) return null;
+    const d = new Date(baseIso);
+    return Number.isNaN(d.getTime()) ? null : d;
   } catch {
-    /* modelrun keblok/hang → fallback berlapis */
+    return null; // keblok/hang/HTML Cloudflare → fallback berlapis
   }
+}
 
-  const fromModelrun = !!base;
-  if (!base) base = await resolveFallback();
+let cache: { base: Date; source: Source; at: number } | null = null;
+let inflight: Promise<{ base: Date; source: Source }> | null = null;
 
+function ttlOf(source: Source): number {
+  return source === "modelrun" ? MODELRUN_TTL_MS : source === "probe" ? PROBE_TTL_MS : BLIND_TTL_MS;
+}
+
+async function resolveBase(): Promise<{ base: Date; source: Source }> {
+  if (cache && Date.now() - cache.at < ttlOf(cache.source)) return cache;
+  if (inflight) return inflight;
+  inflight = (async () => {
+    const now = Date.now();
+    let base = await fetchModelrun();
+    let source: Source = "modelrun";
+    if (!base) {
+      // kandidat run TERBARU dulu: slot ~4h, ~16h, ~28h lalu (3 slot 12-jaman terbaru)
+      for (let i = 0; i < 3 && !base; i++) {
+        const cand = slotFloor(now - (4 + i * 12) * 3600 * 1000);
+        if (await runHasTiles(cand)) {
+          base = cand;
+          source = "probe";
+        }
+      }
+    }
+    if (!base) {
+      base = slotFloor(now - SAFE_LAG_H * 3600 * 1000);
+      source = "blind";
+    }
+    cache = { base, source, at: Date.now() };
+    return { base, source };
+  })().finally(() => {
+    inflight = null;
+  });
+  return inflight;
+}
+
+export async function GET() {
+  const { base, source } = await resolveBase();
   const baserun = fmt(base);
   const now = Date.now();
   const frames: { valid: string; t: number }[] = [];
@@ -99,14 +121,28 @@ export async function GET() {
     const d = new Date(base.getTime() + h * 3600 * 1000);
     frames.push({ valid: fmt(d), t: d.getTime() });
   }
+  // "Sekarang" = frame TERDEKAT ke jam ini (bukan floor 3-jaman yang bisa tertinggal 2 jam 59 mnt).
   let nowIndex = 0;
-  for (let i = 0; i < frames.length; i++) if (frames[i].t <= now) nowIndex = i;
-
-  // umur run (jam) → client kasih tanda kalau datanya agak lama
+  let best = Infinity;
+  for (let i = 0; i < frames.length; i++) {
+    const dist = Math.abs(frames[i].t - now);
+    if (dist < best) {
+      best = dist;
+      nowIndex = i;
+    }
+  }
   const ageH = Math.round((now - base.getTime()) / 3600000);
-
-  return Response.json(
-    { baserun, frames: frames.map((f) => f.valid), nowIndex, fallback: !fromModelrun, ageH },
-    { headers: { "Cache-Control": "no-store" } },
-  );
+  const expired = now > frames[frames.length - 1].t;
+  const body: OfsResponse = {
+    baserun,
+    frames: frames.map((f) => f.valid),
+    nowIndex,
+    fallback: source !== "modelrun",
+    source,
+    ageH,
+    expired,
+  };
+  return Response.json(body, {
+    headers: { "Cache-Control": "public, s-maxage=60, stale-while-revalidate=120" },
+  });
 }

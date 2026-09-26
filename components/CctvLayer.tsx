@@ -5,17 +5,19 @@ import L from "leaflet";
 import { useMemo } from "react";
 import { MAPPED_CAMS, type Cam } from "@/lib/cctv";
 
-// Pin kamera di peta. Ikon dibikin sekali (divIcon) — murah, nggak narik apa-apa
+// Pin kamera di peta. Ikon dibikin per kamera (divIcon) — murah, nggak narik apa-apa
 // dari jaringan. Stream baru jalan pas pin diklik (lihat CctvPlayer).
-const PIN_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h6A2.5 2.5 0 0 1 14 8.5v7A2.5 2.5 0 0 1 11.5 18h-6A2.5 2.5 0 0 1 3 15.5Z"/><path d="M14 10.5 21 7v10l-7-3.5Z"/></svg>`;
+//
+// Tiga varian visual: biasa · perkiraan (ring putus-putus; koordinatnya bisa meleset
+// ratusan meter) · mati (abu; status diketahui dari sesi ini, bukan hardcode).
+// Area sentuh 44×44 (WCAG 2.5.8) walau visualnya 24 px.
+const PIN_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h6A2.5 2.5 0 0 1 14 8.5v7A2.5 2.5 0 0 1 11.5 18h-6A2.5 2.5 0 0 1 3 15.5Z"/><path d="M14 10.5 21 7v10l-7-3.5Z"/></svg>`;
 
 // Beberapa kamera duduk di satu titik yang sama (dua kamera satu simpang, beda
 // arah hadap) → pin-nya bakal saling numpuk dan cuma yang teratas bisa diklik.
 // Solusinya dikipas SAAT RENDER, bukan dengan mengarang koordinat di data:
-// tiap anggota grup digeser ~35 m mengelilingi titik aslinya.
-// ~45 m. Bukan angka asal: dua kamera di satu simpang memang biasanya kepasang
-// di tiang yang beda sudut, jadi jarak segini masuk akal secara fisik. Sengaja
-// nggak lebih kecil — di bawah ini pin baru kepisah pas zoom mentok.
+// tiap anggota grup digeser ~45 m mengelilingi titik aslinya. Bukan angka asal:
+// dua kamera di satu simpang memang biasanya kepasang di tiang yang beda sudut.
 const FAN_RADIUS = 0.0004;
 
 function fanOut(cams: Cam[]): { cam: Cam; pos: [number, number] }[] {
@@ -45,35 +47,53 @@ function fanOut(cams: Cam[]): { cam: Cam; pos: [number, number] }[] {
   return out;
 }
 
-export default function CctvLayer({ onPick }: { onPick: (cam: Cam) => void }) {
+const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+
+function makeIcon(cam: Cam, isDead: boolean) {
+  const cls = ["cam-pin", cam.approx ? "is-approx" : "", isDead ? "is-mati" : ""].filter(Boolean).join(" ");
+  // Nama aksesibel per pin (prop `alt` Marker diabaikan Leaflet untuk divIcon).
+  const label = `Kamera ${cam.name}${cam.approx ? " (posisi perkiraan)" : ""}${isDead ? " — lagi mati" : ""}`;
+  return L.divIcon({
+    className: "cam-hit",
+    html: `<span class="${cls}" role="img" aria-label="${esc(label)}">${PIN_SVG}</span>`,
+    iconSize: [44, 44],
+    iconAnchor: [22, 22],
+  });
+}
+
+type Props = {
+  onPick: (cam: Cam) => void;
+  /** slug → lastSeen (ms) kamera yang terbukti mati/beku di sesi ini. */
+  dead: ReadonlyMap<string, number | null>;
+};
+
+export default function CctvLayer({ onPick, dead }: Props) {
   const placed = useMemo(() => fanOut(MAPPED_CAMS), []);
-  const icon = useMemo(
-    () =>
-      L.divIcon({
-        className: "",
-        html: `<span class="cam-pin" role="img" aria-label="Kamera">${PIN_SVG}</span>`,
-        iconSize: [22, 22],
-        iconAnchor: [11, 11],
-      }),
-    [],
+  const icons = useMemo(
+    () => new Map(placed.map((p) => [p.cam.slug, makeIcon(p.cam, dead.has(p.cam.slug))])),
+    [placed, dead],
   );
 
   return (
     <>
-      {placed.map(({ cam, pos }) => (
-        <Marker
-          key={cam.slug}
-          position={pos}
-          icon={icon}
-          eventHandlers={{ click: () => onPick(cam) }}
-          keyboard
-          alt={`Kamera ${cam.name}`}
-        >
-          <Tooltip direction="top" offset={[0, -12]} className="cam-label">
-            {cam.name}
-          </Tooltip>
-        </Marker>
-      ))}
+      {placed.map(({ cam, pos }) => {
+        const isDead = dead.has(cam.slug);
+        return (
+          <Marker
+            key={cam.slug}
+            position={pos}
+            icon={icons.get(cam.slug)}
+            eventHandlers={{ click: () => onPick(cam) }}
+            keyboard
+          >
+            <Tooltip direction="top" offset={[0, -18]} className="cam-label">
+              {cam.name}
+              {cam.approx ? " · perkiraan" : ""}
+              {isDead ? " · mati" : ""}
+            </Tooltip>
+          </Marker>
+        );
+      })}
     </>
   );
 }

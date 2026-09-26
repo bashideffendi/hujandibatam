@@ -33,3 +33,6 @@ yarn-error.log*
 
 # stray npm audit output
 audit.json
+
+# editor/agent config lokal
+.claude/

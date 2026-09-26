@@ -1,39 +1,48 @@
 @import "tailwindcss";
 
-/* ===== Tema terang (elegant: paper + ink + 1 aksen steel-blue) ===== */
+/* ===== Tema terang (elegant: paper + ink + 1 aksen steel-blue) =====
+   Token didefinisikan lewat [data-theme] — dipasang di <html> (skrip inline layout,
+   sebelum paint) DAN di wrapper app; nilainya sama. Kontras teks kecil ≥ AA. */
 [data-theme="light"] {
   --map-bg: #e8eaed;
   --scrim-top: linear-gradient(180deg, rgba(248, 249, 251, 0.9), rgba(248, 249, 251, 0));
   --panel-bg: rgba(252, 252, 253, 0.82);
+  --panel-solid: #f8f9fb;
   --panel-border: rgba(20, 24, 33, 0.1);
   --panel-hi: rgba(255, 255, 255, 0.7);
   --panel-shadow: 0 22px 60px rgba(25, 35, 65, 0.15);
   --text: #15171c;
   --text-muted: #5b616e;
-  --text-dim: #717784;
+  --text-dim: #646a77; /* ≈5:1 di panel terang (dulu #717784 = 4,26:1, di bawah AA) */
   --accent: #2f6fb3;
   --accent-soft: rgba(47, 111, 179, 0.16);
   --wordmark: #15171c;
   --live-dot: #1aa06a;
+  --stale-text: #9a5b00;
+  --stale-border: rgba(217, 154, 43, 0.4);
   --ctl-bg: rgba(255, 255, 255, 0.7);
   --ctl-border: rgba(20, 24, 33, 0.1);
   --ctl-icon: #3b4150;
   --seg-track: rgba(20, 24, 33, 0.05);
-  --seg-text: #6b7280;
-  --seg-sub: #9aa0ab;
+  --seg-text: #4b5160;
+  --seg-sub: #5f6675;
   --seg-active-bg: #2f6fb3;
   --seg-active-text: #ffffff;
-  --seg-active-sub: rgba(255, 255, 255, 0.7);
+  --seg-active-sub: rgba(255, 255, 255, 0.9);
   --play-bg: #15171c;
   --play-color: #f8f9fb;
   --track: rgba(20, 24, 33, 0.13);
   --thumb: #2f6fb3;
   --place-text: #3b4150;
   --place-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 1px 3px rgba(255, 255, 255, 0.9);
-  --credit: #64748b;
+  --credit: #5f6a7c;
   --link: #2f6fb3;
   --radar-blend: normal;
   --radar-filter: saturate(1.05);
+  --cam-pin-bg: #2f6fb3;
+  --cam-pin-fg: #ffffff;
+  --cam-pin-ring: rgba(255, 255, 255, 0.92);
+  --cam-pin-dead: #9aa0ab;
 }
 
 /* ===== Tema gelap (elegant: near-black ink + off-white) ===== */
@@ -41,6 +50,7 @@
   --map-bg: #0c0d10;
   --scrim-top: linear-gradient(180deg, rgba(10, 11, 14, 0.85), rgba(10, 11, 14, 0));
   --panel-bg: rgba(20, 22, 28, 0.74);
+  --panel-solid: #16181d;
   --panel-border: rgba(255, 255, 255, 0.1);
   --panel-hi: rgba(255, 255, 255, 0.06);
   --panel-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
@@ -51,15 +61,17 @@
   --accent-soft: rgba(110, 162, 221, 0.16);
   --wordmark: #f2f3f5;
   --live-dot: #34c08a;
+  --stale-text: #f2b45c; /* ≈9:1 di pill gelap (dulu #9a5b00 cuma 3,1:1) */
+  --stale-border: rgba(242, 180, 92, 0.35);
   --ctl-bg: rgba(255, 255, 255, 0.07);
   --ctl-border: rgba(255, 255, 255, 0.12);
   --ctl-icon: #cdd3dc;
   --seg-track: rgba(255, 255, 255, 0.05);
   --seg-text: rgba(255, 255, 255, 0.55);
-  --seg-sub: rgba(255, 255, 255, 0.38);
+  --seg-sub: rgba(255, 255, 255, 0.55);
   --seg-active-bg: #6ea2dd;
   --seg-active-text: #0c1018;
-  --seg-active-sub: rgba(12, 16, 24, 0.62);
+  --seg-active-sub: rgba(12, 16, 24, 0.7);
   --play-bg: #f2f3f5;
   --play-color: #0c0d10;
   --track: rgba(255, 255, 255, 0.16);
@@ -70,6 +82,10 @@
   --link: #8fb8e8;
   --radar-blend: screen;
   --radar-filter: saturate(1.12) brightness(1.04);
+  --cam-pin-bg: #6ea2dd;
+  --cam-pin-fg: #0c0d10;
+  --cam-pin-ring: rgba(0, 0, 0, 0.55);
+  --cam-pin-dead: #5b616e;
 }
 
 * {
@@ -79,9 +95,49 @@ html,
 body {
   height: 100%;
   margin: 0;
-  background: #0c0d10;
-  font-family: "Inter", system-ui, sans-serif;
+  background: var(--map-bg, #0c0d10);
+  font-family: var(--font-inter), "Inter", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  /* tarik-ke-bawah di panel jangan memicu pull-to-refresh Chrome / bounce iOS */
+  overscroll-behavior: none;
+  overflow: hidden;
+}
+h1,
+h2 {
+  margin: 0;
+  font: inherit;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+.map-loading {
+  height: 100%;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  background: var(--map-bg, #0c0d10);
+  color: var(--text-muted, rgba(255, 255, 255, 0.5));
+  font-size: 13px;
+}
+.link-btn {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--link);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 /* ===== Leaflet ===== */
@@ -90,6 +146,8 @@ body {
   width: 100%;
   background: var(--map-bg);
   font-family: inherit;
+  /* stacking context sendiri: kontrol Leaflet (z 1000) nggak lagi bersaing sama panel (z 500) */
+  isolation: isolate;
 }
 .leaflet-image-layer {
   mix-blend-mode: var(--radar-blend);
@@ -116,7 +174,7 @@ body {
   top: 0;
   left: 0;
   right: 0;
-  height: 120px;
+  height: calc(120px + env(safe-area-inset-top, 0px));
   z-index: 400;
   background: var(--scrim-top);
   pointer-events: none;
@@ -133,12 +191,15 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 16px 20px;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) calc(20px + env(safe-area-inset-right, 0px)) 16px
+    calc(20px + env(safe-area-inset-left, 0px));
 }
 .brand {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex: none; /* jangan menyusut → wordmark nggak pecah dua baris */
+  min-width: 0;
 }
 .brand .mark {
   color: var(--accent);
@@ -153,12 +214,13 @@ body {
   height: 24px;
 }
 .brand .name {
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-fraunces), "Fraunces", Georgia, serif;
   font-weight: 500;
   font-size: 23px;
   line-height: 1.02;
   letter-spacing: -0.012em;
   color: var(--wordmark);
+  white-space: nowrap;
 }
 .brand .name i {
   font-style: italic;
@@ -169,11 +231,13 @@ body {
   margin-top: 3px;
   font-weight: 500;
   letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 .topbar-right {
   display: flex;
   align-items: center;
   gap: 9px;
+  flex: none;
 }
 .live-pill {
   display: inline-flex;
@@ -188,23 +252,36 @@ body {
   border: 1px solid var(--ctl-border);
   padding: 6px 11px 6px 9px;
   border-radius: 999px;
+  white-space: nowrap;
 }
 .live-pill .dot {
+  position: relative;
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--live-dot);
-  animation: pulse 2.4s infinite;
+}
+/* denyut lewat transform+opacity (composited), bukan box-shadow (repaint terus-menerus) */
+.live-pill .dot::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  animation: pulse 2.4s ease-out infinite;
 }
 @keyframes pulse {
   0% {
-    box-shadow: 0 0 0 0 var(--accent-soft);
+    transform: scale(0.5);
+    opacity: 0.9;
   }
   70% {
-    box-shadow: 0 0 0 6px rgba(110, 162, 221, 0);
+    transform: scale(1.9);
+    opacity: 0;
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(110, 162, 221, 0);
+    transform: scale(1.9);
+    opacity: 0;
   }
 }
 .theme-toggle {
@@ -231,7 +308,7 @@ body {
 .panel {
   position: absolute;
   left: 50%;
-  bottom: 20px;
+  bottom: calc(20px + env(safe-area-inset-bottom, 0px));
   transform: translateX(-50%);
   z-index: 500;
   width: min(540px, calc(100% - 32px));
@@ -284,7 +361,7 @@ body {
   font-weight: 500;
 }
 .status .state {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -292,6 +369,11 @@ body {
   align-items: center;
   gap: 6px;
   color: var(--text-dim);
+  white-space: nowrap;
+  flex: none;
+}
+.status .state.is-stale {
+  color: var(--stale-text);
 }
 .status .state .d {
   width: 6px;
@@ -323,10 +405,10 @@ body {
 }
 .seg-btn .k {
   display: block;
-  font-size: 8px;
+  font-size: 9px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   color: var(--seg-sub);
   margin-top: 3px;
 }
@@ -362,19 +444,31 @@ body {
   width: 15px;
   height: 15px;
 }
+/* Slider: hit-box 28px (target sentuh), track visual 4px lewat pseudo-element. */
 input[type="range"].rng {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
+  height: 28px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+}
+input[type="range"].rng::-webkit-slider-runnable-track {
   height: 4px;
   border-radius: 999px;
   background: var(--track);
-  cursor: pointer;
+}
+input[type="range"].rng::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--track);
 }
 input[type="range"].rng::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 15px;
   height: 15px;
+  margin-top: -5.5px;
   border-radius: 50%;
   background: var(--thumb);
   border: none;
@@ -387,12 +481,16 @@ input[type="range"].rng::-moz-range-thumb {
   background: var(--thumb);
   border: none;
 }
+input[type="range"].rng:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
 .meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-top: 10px;
+  margin-top: 4px;
 }
 .opacity {
   display: flex;
@@ -403,10 +501,10 @@ input[type="range"].rng::-moz-range-thumb {
   letter-spacing: 0.1em;
   color: var(--text-dim);
   font-weight: 600;
+  white-space: nowrap;
 }
 .opacity .rng {
   width: 74px;
-  height: 3px;
 }
 .legend {
   display: flex;
@@ -414,14 +512,9 @@ input[type="range"].rng::-moz-range-thumb {
   gap: 8px;
 }
 .legend .bar {
-  display: flex;
   height: 6px;
   width: 128px;
   border-radius: 999px;
-  overflow: hidden;
-}
-.legend .bar span {
-  flex: 1;
 }
 .legend .lab {
   font-size: 9px;
@@ -431,7 +524,7 @@ input[type="range"].rng::-moz-range-thumb {
   font-weight: 600;
   white-space: nowrap;
 }
-/* legend OFS: gradien swh + skala meter (ngikut BMKG) */
+/* legend OFS: band diskret (hard stop) + skala meter + kategori resmi BMKG */
 .ofs-legend {
   width: 100%;
 }
@@ -453,10 +546,20 @@ input[type="range"].rng::-moz-range-thumb {
   display: flex;
   justify-content: space-between;
   margin-top: 3px;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 600;
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
+}
+.ofs-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  margin-top: 4px;
+  font-size: 9.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  line-height: 1.4;
 }
 .credit {
   text-align: center;
@@ -471,8 +574,13 @@ input[type="range"].rng::-moz-range-thumb {
   color: var(--link);
   text-decoration: none;
 }
+.credit .privacy {
+  display: block;
+  font-size: 9px;
+  opacity: 0.85;
+}
 
-/* ===== mode OMBAK: toggle Hujan/Ombak + legend kategori + popup area ===== */
+/* ===== mode: toggle Hujan/Ombak/CCTV ===== */
 .mode-switch {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -510,17 +618,29 @@ input[type="range"].rng::-moz-range-thumb {
 }
 .live-pill.forecast .dot {
   background: var(--text-dim);
+}
+.live-pill.forecast .dot::after {
   animation: none;
+  display: none;
 }
 
-/* ===== strip kondisi (kualitas udara + angin) ===== */
+/* ===== strip kondisi (proksi Singapura) ===== */
+.conditions-wrap {
+  margin: -2px 0 13px;
+}
 .conditions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 7px 16px;
-  margin: -2px 0 13px;
   padding: 0 2px;
+}
+.conditions-note {
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  color: var(--text-dim);
+  padding: 4px 2px 0;
 }
 .chip {
   display: inline-flex;
@@ -556,11 +676,21 @@ input[type="range"].rng::-moz-range-thumb {
 .chip .rain-ico {
   width: 12px;
   height: 12px;
+  fill: var(--text-dim);
+}
+.chip.is-rain .rain-ico {
   fill: var(--accent);
 }
 .chip .uv-ico {
   width: 13px;
   height: 13px;
+}
+.conditions-err {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin: -2px 0 13px;
+  padding: 0 2px;
+  font-weight: 500;
 }
 
 /* ===== panel: grab handle + collapse (bottom-sheet) ===== */
@@ -570,6 +700,7 @@ input[type="range"].rng::-moz-range-thumb {
 .panel-handle {
   display: block;
   width: 100%;
+  min-height: 36px;
   border: 0;
   background: transparent;
   cursor: pointer;
@@ -593,6 +724,7 @@ input[type="range"].rng::-moz-range-thumb {
   align-items: center;
   gap: 10px;
   width: 100%;
+  min-height: 44px;
   border: 0;
   background: transparent;
   cursor: pointer;
@@ -654,19 +786,15 @@ input[type="range"].rng::-moz-range-thumb {
 
 /* ===== status tertunda (stale) ===== */
 .live-pill[data-stale] {
-  color: #9a5b00; /* AA di pill 9.5px (#c98214 cuma ~3:1) */
-  border-color: rgba(217, 154, 43, 0.4);
+  color: var(--stale-text);
+  border-color: var(--stale-border);
 }
 .live-pill[data-stale] .dot {
   background: #f59e0b;
-  animation: none;
 }
-.conditions-err {
-  font-size: 10px;
-  color: var(--text-dim);
-  margin: -2px 0 13px;
-  padding: 0 2px;
-  font-weight: 500;
+.live-pill[data-stale] .dot::after {
+  animation: none;
+  display: none;
 }
 
 /* tombol pasang PWA (muncul kalau browser support install) */
@@ -674,6 +802,7 @@ input[type="range"].rng::-moz-range-thumb {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  min-height: 36px;
   font-family: inherit;
   font-size: 11px;
   font-weight: 600;
@@ -696,7 +825,7 @@ input[type="range"].rng::-moz-range-thumb {
 /* petunjuk install iOS (Safari only, manual via Share) */
 .ios-hint {
   position: absolute;
-  top: 64px;
+  top: calc(64px + env(safe-area-inset-top, 0px));
   left: 50%;
   transform: translateX(-50%);
   z-index: 600;
@@ -729,8 +858,8 @@ input[type="range"].rng::-moz-range-thumb {
 }
 .ios-hint-x {
   flex: none;
-  width: 24px;
-  height: 24px;
+  width: 36px;
+  height: 36px;
   border: 0;
   background: transparent;
   cursor: pointer;
@@ -749,7 +878,7 @@ input[type="range"].rng::-moz-range-thumb {
   -webkit-backdrop-filter: blur(5px);
   backdrop-filter: blur(5px);
   color: var(--text-muted) !important;
-  font-family: "Inter", system-ui, sans-serif !important;
+  font-family: var(--font-inter), "Inter", system-ui, sans-serif !important;
   font-size: 10px !important;
   line-height: 1.4 !important;
   padding: 2px 7px !important;
@@ -763,17 +892,27 @@ input[type="range"].rng::-moz-range-thumb {
   color: var(--link) !important;
   text-decoration: none;
 }
+/* Di layar sempit panel melebar penuh → atribusi duduk DI ATAS panel (tinggi panel = --panel-h). */
+@media (max-width: 700px) {
+  .leaflet-bottom.leaflet-right {
+    bottom: calc(var(--panel-h, 0px) + 20px + env(safe-area-inset-bottom, 0px));
+  }
+  .leaflet-control-attribution {
+    border-radius: 8px 0 0 8px;
+    border-bottom: 1px solid var(--panel-border);
+  }
+}
 
 /* ===== HP: panel lebih ringkas biar peta dapat ruang lebih ===== */
 @media (max-width: 440px) {
   .topbar {
-    padding: 12px 14px;
+    padding: calc(12px + env(safe-area-inset-top, 0px)) 14px 12px;
   }
   .brand .name {
     font-size: 21px;
   }
   .panel {
-    bottom: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
     width: calc(100% - 20px);
     padding: 12px 14px 11px;
     border-radius: 18px;
@@ -788,9 +927,12 @@ input[type="range"].rng::-moz-range-thumb {
     margin-bottom: 11px;
   }
   .seg-btn {
-    font-size: 11px;
+    font-size: 11.5px;
     padding: 7px 4px 8px;
     min-height: 44px;
+  }
+  .seg-btn .k {
+    display: none; /* sub-label 8-9px nggak terbaca di HP & bikin panel tinggi */
   }
   .mode-btn {
     height: 44px;
@@ -799,15 +941,21 @@ input[type="range"].rng::-moz-range-thumb {
     gap: 11px;
   }
   .meta {
-    margin-top: 11px;
+    margin-top: 4px;
     flex-wrap: wrap;
-    gap: 8px 12px;
+    gap: 4px 12px;
   }
   .legend .bar {
     width: 104px;
   }
   .credit {
-    margin-top: 9px;
+    margin-top: 8px;
+  }
+  .credit .privacy {
+    display: none;
+  }
+  .conditions-wrap {
+    margin-bottom: 11px;
   }
   /* target sentuh >= ~44px di HP */
   .theme-toggle {
@@ -818,12 +966,53 @@ input[type="range"].rng::-moz-range-thumb {
     width: 44px;
     height: 44px;
   }
-  input[type="range"].rng {
+  input[type="range"].rng::-webkit-slider-runnable-track,
+  input[type="range"].rng::-moz-range-track {
     height: 6px;
   }
   input[type="range"].rng::-webkit-slider-thumb {
     width: 22px;
     height: 22px;
+    margin-top: -8px;
+  }
+  .install-btn {
+    min-height: 40px;
+  }
+}
+@media (max-width: 360px) {
+  .brand .name {
+    font-size: 19px;
+  }
+  .brand .sub {
+    display: none;
+  }
+}
+
+/* ===== HP landscape (tinggi ≤480): panel jadi side-sheet kanan, modal muat di layar ===== */
+@media (max-height: 480px) and (orientation: landscape) {
+  .panel {
+    left: auto;
+    right: calc(12px + env(safe-area-inset-right, 0px));
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    top: calc(64px + env(safe-area-inset-top, 0px));
+    transform: none;
+    width: 320px;
+    overflow-y: auto;
+    animation: none;
+    padding: 10px 14px;
+  }
+  .panel-top .conditions {
+    display: none;
+  }
+  .conditions-note {
+    display: none;
+  }
+  .credit .privacy {
+    display: none;
+  }
+  .leaflet-bottom.leaflet-right {
+    right: 344px;
+    bottom: 0;
   }
 }
 
@@ -839,7 +1028,6 @@ input[type="range"].rng::-moz-range-thumb {
 }
 
 /* ===== Laptop/desktop: card lebih ringkas & rendah profil ===== */
-/* status + kondisi jadi SATU baris, spasi dirapatin. HP/tablet portrait nggak keubah. */
 @media (min-width: 900px) {
   .panel {
     width: min(640px, calc(100% - 40px));
@@ -847,7 +1035,7 @@ input[type="range"].rng::-moz-range-thumb {
   }
   .panel-top {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: 24px;
     margin-bottom: 13px;
@@ -856,10 +1044,15 @@ input[type="range"].rng::-moz-range-thumb {
     flex: none;
     margin-bottom: 0;
   }
-  .panel-top .conditions {
+  .panel-top .conditions-wrap {
     flex: 1;
-    justify-content: flex-end;
     margin-bottom: 0;
+  }
+  .panel-top .conditions {
+    justify-content: flex-end;
+  }
+  .panel-top .conditions-note {
+    text-align: right;
   }
   .status .time {
     font-size: 24px;
@@ -871,7 +1064,7 @@ input[type="range"].rng::-moz-range-thumb {
     gap: 14px;
   }
   .meta {
-    margin-top: 12px;
+    margin-top: 6px;
   }
   .credit {
     margin-top: 10px;
@@ -879,9 +1072,15 @@ input[type="range"].rng::-moz-range-thumb {
 }
 
 /* ===== CCTV: pin kamera + pemutar (satu stream, on-demand) ===== */
-/* Pin kamera: isian SOLID warna aksen + halo kontras.
-   Jangan pakai --ctl-bg (putih transparan) — di basemap Positron yang juga
-   nyaris putih, pin-nya hilang nyaru sama daratan. */
+/* Hit-box 44×44 (target sentuh), visual 24px di tengah. Tanpa kotak putih default Leaflet. */
+.cam-hit {
+  background: transparent;
+  border: 0;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+/* Pin: isian SOLID warna aksen + halo kontras (--ctl-bg putih transparan nyaru di Positron). */
 .cam-pin {
   display: grid;
   place-items: center;
@@ -894,16 +1093,27 @@ input[type="range"].rng::-moz-range-thumb {
   box-shadow:
     0 0 0 2px var(--cam-pin-ring),
     0 2px 6px rgba(0, 0, 0, 0.35);
-  cursor: pointer;
   transition: transform 0.14s ease;
 }
-.cam-pin:hover,
-.cam-pin:focus-visible {
+.cam-hit:hover .cam-pin,
+.cam-hit:focus-visible .cam-pin {
   transform: scale(1.18);
 }
 .cam-pin svg {
   width: 13px;
   height: 13px;
+}
+/* posisi perkiraan: ring putus-putus */
+.cam-pin.is-approx {
+  outline: 2px dashed var(--cam-pin-ring);
+  outline-offset: 2px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+/* terbukti mati di sesi ini: abu */
+.cam-pin.is-mati {
+  background: var(--cam-pin-dead);
+  color: #fff;
+  opacity: 0.85;
 }
 .leaflet-tooltip.cam-label {
   background: transparent;
@@ -926,18 +1136,22 @@ input[type="range"].rng::-moz-range-thumb {
   z-index: 1200;
   display: grid;
   place-items: center;
-  padding: 16px;
-  background: rgba(8, 10, 14, 0.62);
-  backdrop-filter: blur(3px);
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  background: rgba(8, 10, 14, 0.72);
+  overflow-y: auto;
 }
+/* Modal: warna solid (tanpa backdrop-filter — blur bersarang di sekitar <video> 25 fps
+   bikin compositor HP low-end kerja keras tanpa manfaat visual). Muat di layar landscape. */
 .cctv-modal {
-  width: min(720px, 100%);
+  width: min(720px, 100%, calc((100dvh - 132px) * 16 / 9));
+  max-height: calc(100dvh - 32px);
+  display: flex;
+  flex-direction: column;
   border-radius: 16px;
   overflow: hidden;
-  background: var(--panel-bg);
+  background: var(--panel-solid);
   border: 1px solid var(--panel-border);
   box-shadow: var(--panel-shadow), inset 0 1px 0 var(--panel-hi);
-  backdrop-filter: blur(18px) saturate(1.3);
 }
 .cctv-head {
   display: flex;
@@ -945,10 +1159,11 @@ input[type="range"].rng::-moz-range-thumb {
   justify-content: space-between;
   gap: 12px;
   padding: 12px 14px;
+  flex: none;
 }
 .cctv-name {
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 600;
   color: var(--text);
   letter-spacing: -0.01em;
 }
@@ -964,8 +1179,8 @@ input[type="range"].rng::-moz-range-thumb {
   flex: none;
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 36px;
+  height: 36px;
   border-radius: 10px;
   background: var(--ctl-bg);
   border: 1px solid var(--ctl-border);
@@ -980,6 +1195,8 @@ input[type="range"].rng::-moz-range-thumb {
   position: relative;
   aspect-ratio: 16 / 9;
   background: #0b0c0f;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .cctv-video {
   width: 100%;
@@ -990,14 +1207,56 @@ input[type="range"].rng::-moz-range-thumb {
 .cctv-overlay {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.02em;
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(255, 255, 255, 0.82);
   text-align: center;
   padding: 16px;
+  background: rgba(8, 10, 14, 0.35);
+}
+.cctv-stage-text {
+  font-weight: 600;
+  color: #fff;
+}
+.cctv-note {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.72);
+  max-width: 34ch;
+  line-height: 1.4;
+}
+.cctv-retry {
+  margin-top: 4px;
+  min-height: 40px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+/* nyendat: chip kecil, TIDAK menutup gambar/kontrol native */
+.cctv-chip {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(8, 10, 14, 0.6);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  pointer-events: none;
 }
 .cctv-foot {
   display: flex;
@@ -1005,6 +1264,7 @@ input[type="range"].rng::-moz-range-thumb {
   justify-content: space-between;
   gap: 10px;
   padding: 9px 14px 12px;
+  flex: none;
 }
 .cctv-live {
   display: inline-flex;
@@ -1015,12 +1275,22 @@ input[type="range"].rng::-moz-range-thumb {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-muted);
+  white-space: nowrap;
 }
 .cctv-live .dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
+  background: var(--text-dim);
+}
+.cctv-live.is-live .dot {
   background: var(--live-dot);
+}
+.cctv-live.is-off {
+  color: var(--stale-text);
+}
+.cctv-live.is-off .dot {
+  background: #f59e0b;
 }
 .cctv-credit {
   font-size: 9.5px;
@@ -1045,7 +1315,8 @@ input[type="range"].rng::-moz-range-thumb {
   color: var(--text-dim);
 }
 .cam-chip {
-  padding: 4px 9px;
+  min-height: 36px;
+  padding: 6px 11px;
   border-radius: 999px;
   border: 1px solid var(--ctl-border);
   background: var(--ctl-bg);
@@ -1064,6 +1335,7 @@ input[type="range"].rng::-moz-range-thumb {
     height: 44px;
   }
   .cam-chip {
+    min-height: 44px;
     padding: 8px 12px;
   }
 }
@@ -1073,7 +1345,7 @@ input[type="range"].rng::-moz-range-thumb {
   }
 }
 
-/* Tombol putar pas autoplay diblokir browser (data sehat, cuma butuh gestur). */
+/* Tombol putar pas autoplay diblokir browser / dibuka dari link (data sehat, cuma butuh gestur). */
 .cctv-play {
   display: flex;
   flex-direction: column;
@@ -1109,16 +1381,60 @@ input[type="range"].rng::-moz-range-thumb {
   color: var(--text-muted);
 }
 
-/* Token pin kamera — didefinisikan per tema biar kontras di dua-duanya:
-   terang = biru pekat + glyph putih di atas daratan pucat;
-   gelap  = biru muda + glyph tinta gelap di atas daratan near-black. */
-[data-theme="light"] {
-  --cam-pin-bg: #2f6fb3;
-  --cam-pin-fg: #ffffff;
-  --cam-pin-ring: rgba(255, 255, 255, 0.92);
+/* ===== error boundary (app/error.tsx) ===== */
+.err-screen {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--map-bg, #0c0d10);
 }
-[data-theme="dark"] {
-  --cam-pin-bg: #6ea2dd;
-  --cam-pin-fg: #0c0d10;
-  --cam-pin-ring: rgba(0, 0, 0, 0.55);
+.err-card {
+  max-width: 380px;
+  text-align: center;
+  background: var(--panel-solid, #16181d);
+  border: 1px solid var(--panel-border, rgba(255, 255, 255, 0.1));
+  border-radius: 20px;
+  padding: 24px 22px;
+  color: var(--text, #f2f3f5);
+}
+.err-title {
+  font-family: var(--font-fraunces), "Fraunces", Georgia, serif;
+  font-size: 22px;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+.err-body {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted, rgba(255, 255, 255, 0.6));
+  margin: 0 0 16px;
+}
+.err-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.err-btn {
+  min-height: 44px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--ctl-border, rgba(255, 255, 255, 0.12));
+  background: var(--ctl-bg, rgba(255, 255, 255, 0.07));
+  color: var(--text, #f2f3f5);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.err-btn.primary {
+  background: var(--accent, #6ea2dd);
+  border-color: var(--accent, #6ea2dd);
+  color: var(--seg-active-text, #0c1018);
+}
+.err-digest {
+  margin-top: 12px;
+  font-size: 10px;
+  color: var(--text-dim, rgba(255, 255, 255, 0.5));
 }

@@ -2,14 +2,12 @@
 
 import dynamic from "next/dynamic";
 
-// Leaflet butuh `window`, jadi map-nya client-only (nggak di-SSR).
+// Leaflet butuh `window`, jadi map-nya client-only (nggak di-SSR). Placeholder-nya
+// ikut tema (html[data-theme] di-set skrip inline di layout SEBELUM paint) — jadi
+// siang hari nggak ada kedipan gelap → terang.
 const RadarMap = dynamic(() => import("./RadarMap"), {
   ssr: false,
-  loading: () => (
-    <div className="flex h-full w-full items-center justify-center bg-[#0b1220] text-sm text-white/50">
-      Memuat peta…
-    </div>
-  ),
+  loading: () => <div className="map-loading">Memuat peta…</div>,
 });
 
 export default function MapShell() {
