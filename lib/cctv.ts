@@ -97,12 +97,14 @@ export async function checkCam(slug: string, signal?: AbortSignal): Promise<CamC
   }
 }
 
-// hls.js "light" (tanpa subtitle/EME/CMCD/alt-audio) cukup untuk stream TS polos
-// Pemko — ±34% lebih kecil dari build penuh. Dimuat sekali, dibagi RadarMap
-// (pemanasan saat masuk mode CCTV) dan CctvPlayer.
-let hlsPromise: Promise<typeof import("hls.js/light")> | null = null;
+// hls.js build PENUH — JANGAN ganti ke "hls.js/light": build light membuang parser
+// HEVC-dalam-MPEG-TS, padahal sebagian kamera Pemko menyiarkan H.265 (dicek 2026-09-27:
+// dprd, southgate, madanipancuran, sukajadi2). Dengan build light, 4 kamera itu gagal
+// total walau browsernya mendukung HEVC. Dimuat sekali, dibagi RadarMap (pemanasan
+// saat masuk mode CCTV) dan CctvPlayer.
+let hlsPromise: Promise<typeof import("hls.js")> | null = null;
 export function loadHls() {
-  hlsPromise ??= import("hls.js/light").catch((e) => {
+  hlsPromise ??= import("hls.js").catch((e) => {
     hlsPromise = null;
     throw e;
   });

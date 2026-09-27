@@ -580,6 +580,49 @@ input[type="range"].rng:disabled {
   opacity: 0.85;
 }
 
+/* ===== baris info tambahan di status: echo radar (HUJAN) & prakiraan perairan (OMBAK) ===== */
+.echo-line,
+.perairan-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 5px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+.echo-line .d,
+.perairan-line .d {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  flex: none;
+  margin-top: 5px;
+}
+.echo-line.is-on {
+  color: var(--text);
+}
+.echo-line.is-on .d {
+  background: var(--accent);
+}
+.perairan-line b {
+  font-weight: 600;
+  color: var(--text);
+}
+.perairan-line.has-warn .d {
+  background: #f59e0b;
+}
+.perairan-warn {
+  color: var(--stale-text);
+  font-weight: 600;
+}
+.cam-chip.is-mati {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
 /* ===== mode: toggle Hujan/Ombak/CCTV ===== */
 .mode-switch {
   display: grid;

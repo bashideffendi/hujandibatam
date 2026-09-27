@@ -2,6 +2,19 @@
 // biar field nggak "disalin tangan" lalu diam-diam beda.
 import type { Frame } from "./radar";
 
+export type EchoSummary = {
+  /** ada echo radar berarti di kotak Batam ±20 km pada frame terbaru */
+  near: boolean;
+  /** fraksi kotak yang ber-echo pada frame terbaru, 0–1 */
+  coverage: number;
+  /** kelas intensitas tertinggi (dari palet MSS): ringan | sedang | lebat */
+  level: "ringan" | "sedang" | "lebat" | null;
+  /** ts (SGT) frame terakhir yang punya echo dalam jendela lookback; null = tidak ada */
+  lastTs: string | null;
+  /** panjang jendela yang diperiksa ke belakang, menit */
+  lookbackMin: number;
+};
+
 export type FramesResponse = {
   frames: Frame[];
   count: number;
@@ -11,6 +24,34 @@ export type FramesResponse = {
   ageMinutes: number | null;
   /** "mss" = probe nemu file; "lastGood" = pakai hasil probe sebelumnya (≤3 jam); "none" = nihil. */
   source: "mss" | "lastGood" | "none";
+  /** deteksi echo sekitar Batam dari piksel PNG (null kalau decode gagal). */
+  echo: EchoSummary | null;
+};
+
+/** Prakiraan teks resmi BMKG per wilayah perairan (Batam = E.02 "Perairan Kep. Batam"). */
+export type PerairanEntry = {
+  validFrom: string; // ISO UTC
+  validTo: string; // ISO UTC
+  timeDesc: string; // "Hari ini", "Besok", …
+  waveCat: string; // Tenang/Rendah/Sedang/Tinggi/…
+  waveDesc: string; // "0.5 - 1.25 m"
+  windFrom: string;
+  windTo: string;
+  windMinKt: number | null;
+  windMaxKt: number | null;
+  weather: string;
+  weatherDesc: string;
+  /** peringatan dini; kosong = tidak ada */
+  warning: string;
+};
+export type PerairanResponse = {
+  code: string;
+  name: string;
+  issued: string;
+  /** entri yang mencakup jam sekarang, atau yang terdekat ke depan */
+  current: PerairanEntry | null;
+  /** true kalau `current` belum mulai (jendela sekarang tidak ada di data) */
+  upcoming: boolean;
 };
 
 export type AqReading = { psi: number; pm25: number | null; label: string; color: string; ts: string | null };

@@ -27,6 +27,8 @@ export const NEA = {
 export const OFS_HOST = "https://maritim.bmkg.go.id";
 export const OFS_MODELRUN = `${OFS_HOST}/api21/modelrun`;
 export const OFS_REFERER = `${OFS_HOST}/ofs`;
+/** Prakiraan teks per wilayah perairan (Batam = E.02 "Perairan Kep. Batam"). */
+export const OFS_PERAIRAN = `${OFS_HOST}/public_api/perairan/E.02.json`;
 /** Template tile TMS (y-flip) pre-colored contourf swh. z/x/y boleh angka atau placeholder Leaflet. */
 export const ofsTilePath = (
   baserun: string,

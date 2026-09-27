@@ -4,7 +4,7 @@
 
 **Live:** https://hujandibatam.masbash.id (Vercel, auto-deploy tiap push ke `main`)
 **Repo:** https://github.com/bashideffendi/hujandibatam (publik — jangan commit secret)
-**Stack:** Next.js 16 (App Router), React 19, Tailwind 4, Leaflet + react-leaflet, hls.js (light)
+**Stack:** Next.js 16 (App Router), React 19, Tailwind 4, Leaflet + react-leaflet, hls.js
 
 ## Kenapa
 

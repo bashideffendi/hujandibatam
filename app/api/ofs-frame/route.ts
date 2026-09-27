@@ -18,6 +18,11 @@ const SAFE_LAG_H = 15;
 const MODELRUN_TTL_MS = 5 * 60 * 1000;
 const PROBE_TTL_MS = 10 * 60 * 1000;
 const BLIND_TTL_MS = 60 * 1000;
+// Latensi BMKG terukur 0,7–3,6 dtk. Timeout yang terlalu ketat (dulu 3 dtk/2 dtk) bikin
+// server jatuh ke run yang LEBIH LAMA padahal run terbaru tersedia. Terburuk: 6 + 3×4 = 18 dtk
+// (< maxDuration 20), dan hasilnya di-cache jadi jarang terjadi.
+const MODELRUN_TIMEOUT_MS = 6000;
+const PROBE_TIMEOUT_MS = 4000;
 const BROWSER_HEADERS = {
   "User-Agent":
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -48,7 +53,7 @@ async function runHasTiles(base: Date): Promise<boolean> {
     const r = await fetch(ofsTilePath(fmt(base), valid, 7, 100, 64), {
       cache: "no-store",
       redirect: "manual", // kalau BMKG pindah host lagi, ketahuan di log (bukan diam-diam ikut 301)
-      signal: AbortSignal.timeout(2000),
+      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
       headers: BROWSER_HEADERS,
     });
     if (r.status >= 300 && r.status < 400) console.warn("[ofs] tile redirect →", r.headers.get("location"));
@@ -62,7 +67,7 @@ async function fetchModelrun(): Promise<Date | null> {
   try {
     const res = await fetch(OFS_MODELRUN, {
       cache: "no-store",
-      signal: AbortSignal.timeout(3000),
+      signal: AbortSignal.timeout(MODELRUN_TIMEOUT_MS),
       headers: BROWSER_HEADERS,
     });
     if (!res.ok) return null;

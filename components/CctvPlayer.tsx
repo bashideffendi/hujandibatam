@@ -186,7 +186,7 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
       if (hls || cancelled) return; // jalur hls.js punya handler sendiri
       const code = video.error?.code;
       if (code === 4) dead("mati", null);
-      else if (code === 3) fail("HP-nya kewalahan muter siaran ini.");
+      else if (code === 3) fail("Siaran kamera ini nggak bisa diputar di perangkat ini.");
       else fail(hasPlayed ? "Koneksi ke kamera putus." : "Nggak bisa nyambung ke kamera.");
     };
     video.addEventListener("playing", onPlaying);
@@ -387,6 +387,16 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
           fail(hasPlayed ? "Koneksi ke kamera putus." : "Nggak bisa nyambung ke kamera.");
           return;
         }
+        // Codec tidak didukung browser (sebagian kamera menyiarkan H.265): recover percuma,
+        // dan ini BUKAN salah perangkat/jaringan — bilang apa adanya.
+        const codecIssue =
+          data.details === Hls.ErrorDetails.MANIFEST_INCOMPATIBLE_CODECS_ERROR ||
+          data.details === Hls.ErrorDetails.BUFFER_ADD_CODEC_ERROR ||
+          data.details === Hls.ErrorDetails.BUFFER_INCOMPATIBLE_CODECS_ERROR;
+        if (codecIssue) {
+          fail("Kamera ini pakai format video H.265 yang belum didukung browser ini. Coba browser lain atau kamera lain.");
+          return;
+        }
         if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
           if (!mediaRecovered) {
             mediaRecovered = true;
@@ -394,7 +404,7 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
             tryPlay();
             return;
           }
-          fail("HP-nya kewalahan muter siaran ini.");
+          fail("Siaran kamera ini nggak bisa diputar di perangkat ini.");
           return;
         }
         fail("Siaran nggak bisa diputar.");

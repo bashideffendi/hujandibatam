@@ -12,7 +12,13 @@ import {
   Tooltip,
   useMap,
 } from "react-leaflet";
-import type { ConditionsResponse, FramesResponse, OfsResponse } from "@/lib/api-types";
+import type {
+  ConditionsResponse,
+  EchoSummary,
+  FramesResponse,
+  OfsResponse,
+  PerairanResponse,
+} from "@/lib/api-types";
 import {
   CARTO_SUBDOMAINS,
   CCTV_MAX_ZOOM,
@@ -60,6 +66,8 @@ const THEME_KEY = "hujan-theme";
 const MODE_KEY = "hujan-mode";
 const VIEW_KEY = "hujan-view";
 const COLLAPSED_KEY = "hujan-collapsed";
+const RECENT_KEY = "hujan-cams-recent";
+const PERAIRAN_MS = 30 * 60 * 1000; // prakiraan teks BMKG terbit 2x sehari
 
 const reduceMotion = () =>
   typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -266,6 +274,20 @@ export default function RadarMap() {
   const [ofsFailed, setOfsFailed] = useState(false);
   const [ofsTilesDown, setOfsTilesDown] = useState(false);
   const [maskOk, setMaskOk] = useState<boolean | null>(null);
+  const [perairan, setPerairan] = useState<PerairanResponse | null>(null);
+  const [echo, setEcho] = useState<EchoSummary | null>(null);
+  // CCTV: 3 kamera terakhir dibuka (localStorage, divalidasi ke daftar kamera).
+  const [recentCams, setRecentCams] = useState<Cam[]>(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]");
+      return (Array.isArray(raw) ? raw : [])
+        .map((s) => findCam(String(s)))
+        .filter((c): c is Cam => !!c)
+        .slice(0, 3);
+    } catch {
+      return [];
+    }
+  });
 
   // CCTV: kamera yang lagi diputar (null = nggak ada stream jalan) + kamera yang terbukti mati sesi ini.
   const [activeCam, setActiveCam] = useState<Cam | null>(init.cam);
@@ -293,6 +315,7 @@ export default function RadarMap() {
   const framesCtrl = useRef<AbortController | null>(null);
   const condCtrl = useRef<AbortController | null>(null);
   const ofsCtrl = useRef<AbortController | null>(null);
+  const perairanCtrl = useRef<AbortController | null>(null);
   const collapseTouched = useRef(false);
 
   // Padding fit dinamis: ukur tinggi panel & topbar asli (di HP panel bisa lebih tinggi karena
@@ -337,6 +360,7 @@ export default function RadarMap() {
         framesRef.current = data.frames;
         setFrames(data.frames);
         setStale(Boolean(data.stale));
+        setEcho(data.echo ?? null);
         // Realign berdasarkan TIMESTAMP, bukan indeks: daftar bergeser 1 langkah tiap refetch,
         // jadi hasil scrub nggak diam-diam maju 5 menit. Saat Putar, biarkan loop jalan.
         if (!playingRef.current) {
@@ -388,6 +412,24 @@ export default function RadarMap() {
     },
     [fetchJson],
   );
+
+  // Prakiraan teks BMKG "Perairan Kep. Batam" (E.02) — data yang PERSIS Batam, mode OMBAK.
+  const loadPerairan = useCallback(async () => {
+    try {
+      setPerairan(await fetchJson<PerairanResponse>("/api/perairan", perairanCtrl));
+    } catch (e) {
+      if (isAbort(e)) return;
+      setPerairan(null); // gagal → barisnya disembunyikan, jangan mengarang
+    }
+  }, [fetchJson]);
+  useEffect(() => {
+    if (mode !== "ombak") return;
+    loadPerairan();
+    const t = setInterval(() => {
+      if (!document.hidden) loadPerairan();
+    }, PERAIRAN_MS);
+    return () => clearInterval(t);
+  }, [mode, loadPerairan]);
 
   // Polling DIGERBANG per mode & visibilitas: HUJAN poll frame+kondisi, OMBAK poll OFS,
   // CCTV nggak poll apa-apa. Masuk mode → fetch segera (data lama nggak dipakai 2 menit).
@@ -676,6 +718,15 @@ export default function RadarMap() {
   const pickCam = useCallback((cam: Cam) => {
     setCamAutoStart(true);
     setActiveCam(cam);
+    setRecentCams((prev) => {
+      const next = [cam, ...prev.filter((c) => c.slug !== cam.slug)].slice(0, 3);
+      try {
+        localStorage.setItem(RECENT_KEY, JSON.stringify(next.map((c) => c.slug)));
+      } catch {
+        /* abaikan */
+      }
+      return next;
+    });
   }, []);
   const onDead = useCallback((slug: string, lastSeen: number | null) => {
     setDeadCams((m) => {
@@ -731,7 +782,26 @@ export default function RadarMap() {
               ? `${current.date} · citra ${latestAge ?? 0} mnt lalu`
               : current.date;
 
+  // Echo radar di kotak Batam ±20 km — jawaban langsung "lagi ada hujan nggak?". Tetap
+  // disebut "echo" (bukan "hujan"): radar melihat butiran di udara, belum tentu sampai tanah.
+  const echoLast = echo?.lastTs ? frames.find((f) => f.ts === echo.lastTs) : undefined;
+  const echoLastAge = echo?.lastTs ? ageMinutesOf(echo.lastTs, now) : null;
+  const echoText =
+    !echo || status === "error" || !frames.length
+      ? null
+      : echo.near
+        ? `Radar ±20 km Batam: ADA echo${echo.level ? ` · ${echo.level}` : ""}${
+            echo.coverage >= 0.005 ? ` · ${Math.round(echo.coverage * 100)}% area` : ""
+          }`
+        : echo.lastTs
+          ? `Radar ±20 km Batam: nihil · terakhir ${echoLast?.time ?? "—"}${
+              echoLastAge !== null ? ` (${echoLastAge} mnt lalu)` : ""
+            }`
+          : `Radar ±20 km Batam: nihil ${echo.lookbackMin} mnt terakhir`;
+
   // ---- turunan OMBAK ----
+  const perairanCur = perairan?.current ?? null;
+  const fmtWave = (s: string) => s.replace(/\./g, ",").replace(/\s*-\s*/, "–");
   const ofsReady = ofsCount > 0;
   const ofsError = ofsFailed || ofsTilesDown || (!!ofs && !ofsReady);
   const ofsValid = ofs?.frames[ofsIdx];
@@ -946,7 +1016,7 @@ export default function RadarMap() {
               )}
             </span>
             <span className="mini-view">
-              {mode === "ombak" ? `Ombak · ${VIEWS[view].label}` : mode === "cctv" ? "CCTV · Kota Batam" : VIEWS[view].label}
+              {mode === "ombak" ? `Ombak · ${VIEWS[view].label}` : mode === "cctv" ? "CCTV · Kota Batam" : `${VIEWS[view].label}${echo?.near ? " · ada echo" : ""}`}
             </span>
             <svg className="mini-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               <path d="M6 15l6-6 6 6" />
@@ -974,6 +1044,22 @@ export default function RadarMap() {
                           </>
                         )}
                       </div>
+                      {perairan && perairanCur && (
+                        <div className={`perairan-line${perairanCur.warning ? " has-warn" : ""}`}>
+                          <span className="d" />
+                          <span>
+                            <b>{perairan.name}</b> · BMKG: {perairanCur.waveCat.toLowerCase()}{" "}
+                            {fmtWave(perairanCur.waveDesc)}
+                            {perairanCur.windMinKt !== null && perairanCur.windMaxKt !== null
+                              ? ` · angin ${perairanCur.windMinKt}–${perairanCur.windMaxKt} kt dari ${perairanCur.windFrom.toLowerCase()}`
+                              : ""}
+                            {perairan.upcoming ? " (periode berikutnya)" : ""}
+                            {perairanCur.warning && (
+                              <span className="perairan-warn"> · {perairanCur.warning}</span>
+                            )}
+                          </span>
+                        </div>
+                      )}
                     </div>
                     <div className={`state${ofsError || ofsStale ? " is-stale" : ""}`}>
                       <span className="d" style={{ background: ofsError ? "#f59e0b" : "var(--text-dim)" }} />
@@ -1015,6 +1101,12 @@ export default function RadarMap() {
                           </>
                         )}
                       </div>
+                      {echoText && (
+                        <div className={`echo-line${echo?.near ? " is-on" : ""}`}>
+                          <span className="d" />
+                          {echoText}
+                        </div>
+                      )}
                     </div>
                     <div className={`state${radarOk ? "" : " is-stale"}`}>
                       <span className="d" style={{ background: radarOk ? "var(--live-dot)" : "#f59e0b" }} />
@@ -1101,6 +1193,22 @@ export default function RadarMap() {
 
               {mode === "hujan" && conditionsError && !conditions && (
                 <div className="conditions-err">Data cuaca tambahan lagi nggak tersedia</div>
+              )}
+
+              {mode === "cctv" && recentCams.length > 0 && (
+                <div className="cam-extra cam-recent">
+                  <span className="cam-extra-lab">Terakhir dibuka</span>
+                  {recentCams.map((c) => (
+                    <button
+                      key={c.slug}
+                      className={`cam-chip${deadCams.has(c.slug) ? " is-mati" : ""}`}
+                      onClick={() => pickCam(c)}
+                    >
+                      {c.name}
+                      {deadCams.has(c.slug) ? " · mati" : ""}
+                    </button>
+                  ))}
+                </div>
               )}
 
               {mode === "cctv" && (
