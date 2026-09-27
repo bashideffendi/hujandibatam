@@ -284,9 +284,29 @@ h2 {
     opacity: 0;
   }
 }
-.theme-toggle {
+.live-pill.forecast {
+  color: var(--text-muted);
+}
+.live-pill.forecast .dot {
+  background: var(--text-dim);
+}
+.live-pill.forecast .dot::after,
+.live-pill[data-stale] .dot::after {
+  animation: none;
+  display: none;
+}
+.live-pill[data-stale] {
+  color: var(--stale-text);
+  border-color: var(--stale-border);
+}
+.live-pill[data-stale] .dot {
+  background: #f59e0b;
+}
+/* tombol ikon topbar (Bagikan, tema) */
+.icon-btn {
   width: 34px;
   height: 34px;
+  flex: none;
   border-radius: 10px;
   display: grid;
   place-items: center;
@@ -296,15 +316,63 @@ h2 {
   color: var(--ctl-icon);
   transition: transform 0.12s;
 }
-.theme-toggle:active {
+.icon-btn:active {
   transform: scale(0.93);
 }
-.theme-toggle svg {
+.icon-btn svg {
   width: 16px;
   height: 16px;
 }
+/* tombol pasang PWA (muncul kalau browser support install) */
+.install-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 36px;
+  flex: none;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--seg-active-text);
+  background: var(--accent);
+  border: 0;
+  padding: 6px 11px 6px 9px;
+  border-radius: 999px;
+  transition: transform 0.12s ease;
+}
+.install-btn:active {
+  transform: scale(0.95);
+}
+.install-btn svg {
+  width: 14px;
+  height: 14px;
+}
+/* konfirmasi singkat (mis. "Tautan disalin") */
+.toast {
+  position: absolute;
+  left: 50%;
+  top: calc(72px + env(safe-area-inset-top, 0px));
+  transform: translateX(-50%);
+  z-index: 1300;
+  background: var(--panel-solid);
+  color: var(--text);
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: var(--panel-shadow);
+  white-space: nowrap;
+  animation: fadein 0.2s ease both;
+}
 
-/* ===== bottom panel ===== */
+/* ===== bottom panel =====
+   Urutan isi (sama di semua ukuran, = urutan DOM & urutan Tab):
+   status → baris info → [blok CCTV] → mode → timeline → DETAIL (cakupan, kondisi, legenda, kredit).
+   - HP (≤700px): bagian DETAIL dilipat, dibuka lewat tombol "Detail" di baris timeline.
+   - Tablet: semuanya tampil, satu kolom.
+   - Desktop (≥900px): grid; strip kondisi duduk di kanan status. */
 .panel {
   position: absolute;
   left: 50%;
@@ -336,7 +404,7 @@ h2 {
   align-items: flex-end;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 9px;
+  margin-bottom: 8px;
   padding: 0 2px;
 }
 .status .time {
@@ -381,44 +449,85 @@ h2 {
   border-radius: 50%;
   background: var(--live-dot);
 }
-.segmented {
+
+/* baris info selebar panel: echo radar & prakiraan BMKG (HUJAN), prakiraan perairan (OMBAK) */
+.info-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: -2px 0 10px;
+  padding: 0 2px;
+}
+.info-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+.info-line .d {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  flex: none;
+  margin-top: 5px;
+}
+.info-line b {
+  font-weight: 600;
+  color: var(--text);
+}
+.info-line.is-on {
+  color: var(--text);
+}
+.info-line.is-on .d {
+  background: var(--accent);
+}
+.info-line.has-warn .d {
+  background: #f59e0b;
+}
+.info-warn {
+  color: var(--stale-text);
+  font-weight: 600;
+}
+
+/* ===== mode: toggle Hujan/Ombak/CCTV ===== */
+.mode-switch {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 3px;
-  background: var(--seg-track);
-  border-radius: 12px;
-  padding: 3px;
-  margin-bottom: 10px;
+  gap: 6px;
+  margin-bottom: 9px;
 }
-.seg-btn {
-  appearance: none;
-  border: 0;
-  cursor: pointer;
+.mode-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 36px;
+  border-radius: 11px;
+  border: 1px solid var(--ctl-border);
+  background: var(--ctl-bg);
+  color: var(--text-muted);
   font-family: inherit;
-  color: var(--seg-text);
-  background: transparent;
   font-weight: 600;
-  font-size: 12px;
-  padding: 8px 6px 9px;
-  border-radius: 9px;
-  transition: color 0.2s, background 0.3s;
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 0.25s, color 0.25s, border-color 0.25s;
 }
-.seg-btn .k {
-  display: block;
-  font-size: 9px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--seg-sub);
-  margin-top: 3px;
+.mode-btn .mode-ico {
+  width: 17px;
+  height: 17px;
 }
-.seg-btn.active {
+.mode-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
   color: var(--seg-active-text);
-  background: var(--seg-active-bg);
 }
-.seg-btn.active .k {
-  color: var(--seg-active-sub);
-}
+
+/* ===== timeline ===== */
 .transport {
   display: flex;
   align-items: center;
@@ -449,6 +558,7 @@ input[type="range"].rng {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
+  min-width: 0;
   height: 28px;
   margin: 0;
   background: transparent;
@@ -485,191 +595,79 @@ input[type="range"].rng:disabled {
   cursor: default;
   opacity: 0.6;
 }
-.meta {
-  display: flex;
+/* Tombol "Detail": hanya di layar sempit (di layar lebar bagian detail selalu terbuka). */
+.detail-toggle {
+  display: none;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 4px;
-}
-.opacity {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-dim);
-  font-weight: 600;
-  white-space: nowrap;
-}
-.opacity .rng {
-  width: 74px;
-}
-.legend {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.legend .bar {
-  height: 6px;
-  width: 128px;
-  border-radius: 999px;
-}
-.legend .lab {
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-dim);
-  font-weight: 600;
-  white-space: nowrap;
-}
-/* legend OFS: band diskret (hard stop) + skala meter + kategori resmi BMKG */
-.ofs-legend {
-  width: 100%;
-}
-.ofs-lab {
-  display: block;
-  font-size: 9px;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-dim);
-  font-weight: 600;
-}
-.ofs-bar {
-  height: 9px;
-  width: 100%;
-  border-radius: 999px;
-  margin-top: 5px;
-}
-.ofs-ticks {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 3px;
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-dim);
-  font-variant-numeric: tabular-nums;
-}
-.ofs-cats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 10px;
-  margin-top: 4px;
-  font-size: 9.5px;
-  font-weight: 500;
-  color: var(--text-muted);
-  line-height: 1.4;
-}
-.credit {
-  text-align: center;
-  font-size: 9.5px;
-  color: var(--credit);
-  margin-top: 9px;
-  font-weight: 400;
-  line-height: 1.6;
-  letter-spacing: 0.01em;
-}
-.credit a {
-  color: var(--link);
-  text-decoration: none;
-}
-.credit .privacy {
-  display: block;
-  font-size: 9px;
-  opacity: 0.85;
-}
-
-/* ===== baris info tambahan di status: echo radar (HUJAN) & prakiraan perairan (OMBAK) ===== */
-.echo-line,
-.perairan-line {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  margin-top: 5px;
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-muted);
-  line-height: 1.35;
-}
-.echo-line .d,
-.perairan-line .d {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--text-dim);
+  gap: 4px;
   flex: none;
-  margin-top: 5px;
-}
-.echo-line.is-on {
-  color: var(--text);
-}
-.echo-line.is-on .d {
-  background: var(--accent);
-}
-.perairan-line b {
-  font-weight: 600;
-  color: var(--text);
-}
-.perairan-line.has-warn .d {
-  background: #f59e0b;
-}
-.perairan-warn {
-  color: var(--stale-text);
-  font-weight: 600;
-}
-.cam-chip.is-mati {
-  opacity: 0.6;
-  text-decoration: line-through;
-}
-
-/* ===== mode: toggle Hujan/Ombak/CCTV ===== */
-.mode-switch {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-  margin-bottom: 9px;
-}
-.mode-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  height: 36px;
+  height: 38px;
+  padding: 0 9px 0 12px;
   border-radius: 11px;
   border: 1px solid var(--ctl-border);
   background: var(--ctl-bg);
   color: var(--text-muted);
   font-family: inherit;
+  font-size: 11.5px;
   font-weight: 600;
-  font-size: 12.5px;
   letter-spacing: 0.02em;
   cursor: pointer;
-  transition: background 0.25s, color 0.25s, border-color 0.25s;
 }
-.mode-btn .mode-ico {
-  width: 17px;
-  height: 17px;
+.detail-toggle .detail-chevron {
+  width: 15px;
+  height: 15px;
+  transition: transform 0.2s ease;
 }
-.mode-btn.active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--seg-active-text);
+.detail-toggle[aria-expanded="true"] {
+  color: var(--text);
 }
-.live-pill.forecast {
-  color: var(--text-muted);
-}
-.live-pill.forecast .dot {
-  background: var(--text-dim);
-}
-.live-pill.forecast .dot::after {
-  animation: none;
-  display: none;
+.detail-toggle[aria-expanded="true"] .detail-chevron {
+  transform: rotate(180deg);
 }
 
-/* ===== strip kondisi (proksi Singapura) ===== */
+/* ===== bagian detail ===== */
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  background: var(--seg-track);
+  border-radius: 12px;
+  padding: 3px;
+  margin-top: 10px;
+}
+.seg-btn {
+  appearance: none;
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--seg-text);
+  background: transparent;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 8px 6px 9px;
+  border-radius: 9px;
+  transition: color 0.2s, background 0.3s;
+}
+.seg-btn .k {
+  display: block;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--seg-sub);
+  margin-top: 3px;
+}
+.seg-btn.active {
+  color: var(--seg-active-text);
+  background: var(--seg-active-bg);
+}
+.seg-btn.active .k {
+  color: var(--seg-active-sub);
+}
+
+/* strip kondisi (proksi Singapura) */
 .conditions-wrap {
-  margin: -2px 0 13px;
+  margin-top: 10px;
 }
 .conditions {
   display: flex;
@@ -731,30 +729,127 @@ input[type="range"].rng:disabled {
 .conditions-err {
   font-size: 10px;
   color: var(--text-dim);
-  margin: -2px 0 13px;
+  margin-top: 10px;
   padding: 0 2px;
   font-weight: 500;
 }
 
-/* ===== panel: grab handle + collapse (bottom-sheet) ===== */
+.meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+}
+.opacity {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.opacity .rng {
+  width: 74px;
+}
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.legend .bar {
+  height: 6px;
+  width: 128px;
+  border-radius: 999px;
+}
+.legend .lab {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  font-weight: 600;
+  white-space: nowrap;
+}
+/* legend OFS: band diskret (hard stop) + skala meter + kategori resmi BMKG */
+.ofs-legend {
+  width: 100%;
+  margin-top: 4px;
+}
+.ofs-lab {
+  display: block;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+.ofs-bar {
+  height: 9px;
+  width: 100%;
+  border-radius: 999px;
+  margin-top: 5px;
+}
+.ofs-ticks {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.ofs-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  margin-top: 4px;
+  font-size: 9.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.credit {
+  text-align: center;
+  font-size: 9.5px;
+  color: var(--credit);
+  margin-top: 9px;
+  font-weight: 400;
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+}
+.credit a {
+  color: var(--link);
+  text-decoration: none;
+}
+.credit .privacy {
+  display: block;
+  font-size: 9px;
+  opacity: 0.85;
+}
+
+/* ===== panel: pegangan + lipat (bottom-sheet) ===== */
 .panel[data-collapsed="true"] {
   padding-bottom: 12px;
 }
 .panel-handle {
-  display: block;
+  display: grid;
+  place-items: center;
   width: 100%;
-  min-height: 36px;
+  min-height: 32px;
   border: 0;
   background: transparent;
   cursor: pointer;
-  padding: 1px 0 7px;
-  margin-top: -3px;
+  padding: 0;
+  /* naik ke area padding atas panel: target sentuh tetap 32px, tinggi bersih cuma ~22px */
+  margin: -10px 0 0;
 }
 .panel-handle .handle-chevron {
   display: block;
   width: 22px;
   height: 22px;
-  margin: 0 auto;
   color: var(--text-dim);
   transition: color 0.2s ease, transform 0.2s ease;
 }
@@ -827,44 +922,6 @@ input[type="range"].rng:disabled {
   outline-offset: 0;
 }
 
-/* ===== status tertunda (stale) ===== */
-.live-pill[data-stale] {
-  color: var(--stale-text);
-  border-color: var(--stale-border);
-}
-.live-pill[data-stale] .dot {
-  background: #f59e0b;
-}
-.live-pill[data-stale] .dot::after {
-  animation: none;
-  display: none;
-}
-
-/* tombol pasang PWA (muncul kalau browser support install) */
-.install-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 36px;
-  font-family: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  color: var(--seg-active-text);
-  background: var(--accent);
-  border: 0;
-  padding: 6px 11px 6px 9px;
-  border-radius: 999px;
-  transition: transform 0.12s ease;
-}
-.install-btn:active {
-  transform: scale(0.95);
-}
-.install-btn svg {
-  width: 14px;
-  height: 14px;
-}
-
 /* petunjuk install iOS (Safari only, manual via Share) */
 .ios-hint {
   position: absolute;
@@ -935,8 +992,16 @@ input[type="range"].rng:disabled {
   color: var(--link) !important;
   text-decoration: none;
 }
-/* Di layar sempit panel melebar penuh → atribusi duduk DI ATAS panel (tinggi panel = --panel-h). */
+
+/* ===== layar sempit (HP & tablet kecil): panel RINGKAS, detail dilipat ===== */
 @media (max-width: 700px) {
+  .detail-toggle {
+    display: inline-flex;
+  }
+  .panel:not([data-detail="true"]) .panel-detail {
+    display: none;
+  }
+  /* panel melebar penuh → atribusi duduk DI ATAS panel (tinggi panel = --panel-h) */
   .leaflet-bottom.leaflet-right {
     bottom: calc(var(--panel-h, 0px) + 20px + env(safe-area-inset-bottom, 0px));
   }
@@ -946,28 +1011,44 @@ input[type="range"].rng:disabled {
   }
 }
 
-/* ===== HP: panel lebih ringkas biar peta dapat ruang lebih ===== */
 @media (max-width: 440px) {
   .topbar {
     padding: calc(12px + env(safe-area-inset-top, 0px)) 14px 12px;
   }
+  .topbar-right {
+    gap: 7px;
+  }
   .brand .name {
     font-size: 21px;
+  }
+  /* topbar sempit: pill tinggal titik, tombol Pasang tinggal ikon (status lengkap ada di panel) */
+  .live-pill {
+    padding: 7px;
+  }
+  .live-pill .txt,
+  .install-btn .txt {
+    display: none;
+  }
+  .install-btn {
+    width: 40px;
+    min-height: 40px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 10px;
+  }
+  .install-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+  .icon-btn {
+    width: 40px;
+    height: 40px;
   }
   .panel {
     bottom: calc(12px + env(safe-area-inset-bottom, 0px));
     width: calc(100% - 20px);
     padding: 12px 14px 11px;
     border-radius: 18px;
-  }
-  .status {
-    margin-bottom: 11px;
-  }
-  .status .time {
-    font-size: 23px;
-  }
-  .segmented {
-    margin-bottom: 11px;
   }
   .seg-btn {
     font-size: 11.5px;
@@ -981,10 +1062,12 @@ input[type="range"].rng:disabled {
     height: 44px;
   }
   .transport {
-    gap: 11px;
+    gap: 10px;
+  }
+  .detail-toggle {
+    height: 44px;
   }
   .meta {
-    margin-top: 4px;
     flex-wrap: wrap;
     gap: 4px 12px;
   }
@@ -994,17 +1077,7 @@ input[type="range"].rng:disabled {
   .credit {
     margin-top: 8px;
   }
-  .credit .privacy {
-    display: none;
-  }
-  .conditions-wrap {
-    margin-bottom: 11px;
-  }
   /* target sentuh >= ~44px di HP */
-  .theme-toggle {
-    width: 42px;
-    height: 42px;
-  }
   .play {
     width: 44px;
     height: 44px;
@@ -1018,8 +1091,10 @@ input[type="range"].rng:disabled {
     height: 22px;
     margin-top: -8px;
   }
-  .install-btn {
-    min-height: 40px;
+}
+@media (max-width: 400px) {
+  .live-pill {
+    display: none;
   }
 }
 @media (max-width: 360px) {
@@ -1031,7 +1106,7 @@ input[type="range"].rng:disabled {
   }
 }
 
-/* ===== HP landscape (tinggi ≤480): panel jadi side-sheet kanan, modal muat di layar ===== */
+/* ===== HP landscape (tinggi ≤480): panel jadi side-sheet kanan ===== */
 @media (max-height: 480px) and (orientation: landscape) {
   .panel {
     left: auto;
@@ -1044,12 +1119,10 @@ input[type="range"].rng:disabled {
     animation: none;
     padding: 10px 14px;
   }
-  .panel-top .conditions {
-    display: none;
+  .panel[data-collapsed="true"] {
+    top: auto;
   }
-  .conditions-note {
-    display: none;
-  }
+  .conditions-wrap,
   .credit .privacy {
     display: none;
   }
@@ -1070,52 +1143,86 @@ input[type="range"].rng:disabled {
   }
 }
 
-/* ===== Laptop/desktop: card lebih ringkas & rendah profil ===== */
+/* ===== Laptop/desktop: card rendah profil — strip kondisi di kanan status ===== */
 @media (min-width: 900px) {
   .panel {
     width: min(640px, calc(100% - 40px));
     padding: 14px 20px 11px;
   }
-  .panel-top {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 24px;
-    margin-bottom: 13px;
+  .panel-body {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    column-gap: 24px;
+    align-items: start;
+    grid-template-areas:
+      "status cond"
+      "info info"
+      "cam cam"
+      "mode mode"
+      "transport transport"
+      "seg seg"
+      "meta meta"
+      "credit credit";
   }
-  .panel-top .status {
-    flex: none;
-    margin-bottom: 0;
+  .panel-detail {
+    display: contents;
   }
-  .panel-top .conditions-wrap {
-    flex: 1;
-    margin-bottom: 0;
-  }
-  .panel-top .conditions {
-    justify-content: flex-end;
-  }
-  .panel-top .conditions-note {
-    text-align: right;
+  .status {
+    grid-area: status;
+    margin-bottom: 10px;
   }
   .status .time {
     font-size: 24px;
   }
-  .segmented {
-    margin-bottom: 12px;
+  .conditions-wrap {
+    grid-area: cond;
+    margin-top: 0;
+  }
+  .conditions-err {
+    grid-area: cond;
+    margin-top: 0;
+    text-align: right;
+  }
+  .conditions {
+    justify-content: flex-end;
+  }
+  .conditions-note {
+    text-align: right;
+  }
+  .info-lines {
+    grid-area: info;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 3px 22px;
+    margin: 0 0 12px;
+  }
+  .cam-block {
+    grid-area: cam;
+  }
+  .mode-switch {
+    grid-area: mode;
+    margin-bottom: 11px;
   }
   .transport {
+    grid-area: transport;
     gap: 14px;
   }
+  .segmented {
+    grid-area: seg;
+    margin-top: 12px;
+  }
   .meta {
-    margin-top: 6px;
+    grid-area: meta;
+    margin-top: 8px;
   }
   .credit {
+    grid-area: credit;
     margin-top: 10px;
   }
 }
 
 /* ===== CCTV: pin kamera + pemutar (satu stream, on-demand) ===== */
-/* Hit-box 44×44 (target sentuh), visual 24px di tengah. Tanpa kotak putih default Leaflet. */
+/* Hit-box 44×44 (target sentuh), visual lebih kecil di tengah. Tanpa kotak putih default Leaflet. */
 .cam-hit {
   background: transparent;
   border: 0;
@@ -1153,10 +1260,34 @@ input[type="range"].rng:disabled {
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
 }
 /* terbukti mati di sesi ini: abu */
-.cam-pin.is-mati {
+.cam-pin.is-mati,
+.cam-cluster.is-mati {
   background: var(--cam-pin-dead);
   color: #fff;
   opacity: 0.85;
+}
+/* kelompok kamera berdekatan: lingkaran berangka dengan halo — ketuk untuk memperbesar */
+.cam-cluster {
+  display: grid;
+  place-items: center;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--cam-pin-bg);
+  color: var(--cam-pin-fg);
+  font-size: 12.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  box-shadow:
+    0 0 0 2px var(--cam-pin-ring),
+    0 0 0 6px var(--accent-soft),
+    0 2px 6px rgba(0, 0, 0, 0.35);
+  transition: transform 0.14s ease;
+}
+.cam-hit:hover .cam-cluster,
+.cam-hit:focus-visible .cam-cluster {
+  transform: scale(1.12);
 }
 .leaflet-tooltip.cam-label {
   background: transparent;
@@ -1342,12 +1473,18 @@ input[type="range"].rng:disabled {
   line-height: 1.5;
 }
 
-/* Daftar kamera yang belum punya koordinat terverifikasi (nggak muncul sbg pin). */
+/* Isi panel mode CCTV: kamera terakhir dibuka, petunjuk, kamera tanpa koordinat. */
+.cam-block {
+  margin: -2px 0 10px;
+}
 .cam-extra {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
-  margin-top: 8px;
+  margin-bottom: 8px;
+}
+.cam-extra:last-child {
+  margin: 8px 0 0;
 }
 .cam-extra-lab {
   width: 100%;
@@ -1364,12 +1501,24 @@ input[type="range"].rng:disabled {
   border: 1px solid var(--ctl-border);
   background: var(--ctl-bg);
   color: var(--text-muted);
+  font-family: inherit;
   font-size: 10.5px;
   font-weight: 600;
   cursor: pointer;
 }
 .cam-chip:hover {
   color: var(--text);
+}
+.cam-chip.is-mati {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+.cam-hint {
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1.5;
+  color: var(--text-muted);
+  padding: 0 2px;
 }
 
 @media (max-width: 440px) {
@@ -1383,7 +1532,8 @@ input[type="range"].rng:disabled {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .cam-pin {
+  .cam-pin,
+  .cam-cluster {
     transition: none;
   }
 }
@@ -1413,15 +1563,6 @@ input[type="range"].rng:disabled {
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.14);
   border: 1px solid rgba(255, 255, 255, 0.3);
-}
-
-/* Petunjuk singkat di mode CCTV. */
-.cam-hint {
-  margin-top: 8px;
-  font-size: 10.5px;
-  font-weight: 500;
-  line-height: 1.5;
-  color: var(--text-muted);
 }
 
 /* ===== error boundary (app/error.tsx) ===== */

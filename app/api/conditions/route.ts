@@ -25,7 +25,9 @@ export const maxDuration = 10;
 const STATION = "S102"; // Semakau
 const SOUTH_LAT = 1.3; // batas: stasiun paling selatan SG (terdekat ke Batam)
 const NOWCAST_AREAS = ["Southern Islands", "Sentosa"]; // urutan prioritas
-const FETCH_MS = 3000;
+// Latensi NEA terukur 0,9–2,9 dtk dari Indonesia (lebih cepat dari region sin1). 3 dtk pernah
+// memotong satu panggilan → chip angin hilang diam-diam. Keenam fetch paralel, jadi 5 dtk aman.
+const FETCH_MS = 5000;
 // Bacaan lebih tua dari ini dibuang (feed macet ≠ kondisi sekarang).
 const MAX_AGE_FAST_MS = 30 * 60 * 1000; // hujan, angin
 const MAX_AGE_SLOW_MS = 2 * 3600 * 1000; // PSI, UV

@@ -21,13 +21,19 @@ setiap yang berasal dari Singapura ditandai sebagai proksi di antarmuka.
 
 | Mode | Data | Sumber |
 |---|---|---|
-| **Hujan** | Overlay radar 240 km, 30 frame × 5 menit (2,5 jam), animasi & penggeser waktu; strip kondisi (nowcast 2 jam, hujan terdekat, PSI, UV, angin) | MSS (radar), NEA via data.gov.sg (kondisi) |
-| **Ombak** | Tinggi gelombang signifikan (swh) OFS/WAVEWATCH III sebagai tile pre-colored, 25 frame × 3 jam, mask daratan | BMKG OFS (tile), CircleGeo (vector-tile daratan) |
-| **CCTV** | 28 kamera lalu lintas Kota Batam, **satu stream on-demand** setelah pin diketuk | Pemerintah Kota Batam (HLS publik) |
+| **Hujan** | Overlay radar 240 km, 30 frame × 5 menit (2,5 jam), animasi & penggeser waktu; **deteksi echo ±20 km dari Batam**; prakiraan BMKG Batam Kota (3-jaman); strip kondisi (nowcast 2 jam, hujan terdekat, PSI, UV, angin) | MSS (radar), BMKG (prakiraan kelurahan), NEA via data.gov.sg (kondisi) |
+| **Ombak** | Tinggi gelombang signifikan (swh) OFS/WAVEWATCH III sebagai tile pre-colored, 25 frame × 3 jam, mask daratan; prakiraan teks + peringatan dini Perairan Kep. Batam | BMKG OFS (tile), BMKG (prakiraan perairan E.02), CircleGeo (vector-tile daratan) |
+| **CCTV** | 28 kamera lalu lintas Kota Batam, **satu stream on-demand** setelah pin diketuk; pin berdekatan dikelompokkan (ketuk untuk memperbesar); jalan pintas kamera terakhir dibuka | Pemerintah Kota Batam (HLS publik) |
 
 Tampilan: tema otomatis siang/malam (jam WIB) + toggle manual; 3–4 preset cakupan; panel
 bottom-sheet yang bisa dilipat; PWA installable (service worker minimal, data realtime
-network-only); deep link `?mode=ombak`, `?view=natuna`, `?cam=<slug>`.
+network-only); deep link `?mode=ombak`, `?view=natuna`, `?cam=<slug>`; tombol Bagikan
+(Web Share API, fallback salin tautan).
+
+**Panel di HP dibuat ringkas**: yang selalu tampil cuma status, jawaban echo/prakiraan,
+pilihan mode, dan timeline (±33–42% tinggi layar). Pilihan cakupan, strip kondisi,
+legenda, dan kredit ada di bagian **Detail** yang dibuka satu ketuk (pilihan tersimpan).
+Di layar ≥ 701 px bagian itu selalu terbuka.
 
 ## Data & kejujuran tampilan
 
@@ -68,8 +74,22 @@ npm run build                # verifikasi pakai build; `npm run dev` berat di la
 npm start
 ```
 
+Struktur kode:
+
+| Lokasi | Isi |
+|---|---|
+| `lib/sources.ts` | semua host/URL eksternal (satu tempat) |
+| `lib/api-types.ts` | bentuk respons API, dipakai server & klien |
+| `lib/status.ts` | aturan tampilan (segar/tertunda, teks echo, dll.) — fungsi murni |
+| `lib/echo.ts` | deteksi echo dari piksel PNG radar (server) |
+| `hooks/` | pipeline data: `useRadar`, `useOfs`, `useResource`, `useThemeMode`, polling |
+| `components/RadarMap.tsx` | orkestrator: merangkai hook, peta, dan panel |
+| `components/panel/` | potongan panel: status, kontrol, kondisi, legenda, kredit |
+| `app/api/` | `frames`, `conditions`, `prakiraan`, `ofs-frame`, `perairan` |
+
 Catatan:
-- Semua URL sumber eksternal ada di `lib/sources.ts`; bentuk respons API di `lib/api-types.ts`.
+- hls.js memakai build **penuh**. Jangan ganti ke `hls.js/light`: build itu tidak punya
+  parser HEVC-dalam-TS, padahal sebagian kamera menyiarkan H.265.
 - Route handler dinamis (`force-dynamic`); CDN boleh menahan 30–60 detik (`s-maxage`).
   Jangan pakai ISR/prerender untuk data berjam — pernah membekukan jam tampilan.
 - Function region: Singapura (`vercel.json`).

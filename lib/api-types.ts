@@ -88,6 +88,32 @@ export type ConditionsResponse = {
   asOf: string;
 };
 
+/** Prakiraan cuaca BMKG per kelurahan (3-jaman) — data yang PERSIS Batam, bukan proksi. */
+export type ForecastSlot = {
+  /** ISO UTC */
+  utc: string;
+  /** jam WIB siap-tampil, "11.00" */
+  time: string;
+  /** deskripsi BMKG apa adanya, mis. "Hujan Ringan", "Udara Kabur" */
+  desc: string;
+  /** suhu °C */
+  t: number | null;
+  /** kelembapan % */
+  hu: number | null;
+  /** curah hujan mm */
+  tp: number | null;
+};
+export type ForecastResponse = {
+  /** nama pendek buat UI, mis. "Batam Kota" */
+  place: string;
+  /** "Teluk Tering, Batam Kota" */
+  detail: string;
+  /** waktu analisis model (ISO), kalau ada */
+  analysis: string | null;
+  /** slot mulai dari yang paling dekat dengan jam sekarang */
+  slots: ForecastSlot[];
+};
+
 export type OfsResponse = {
   baserun: string;
   frames: string[];

@@ -39,6 +39,12 @@ export const ofsTilePath = (
 ) =>
   `${OFS_HOST}/api21/mpl_req/w3g_hires/swh/0/${baserun}/${valid}/${z}/${x}/${y}.png?ci=1&overlays=,contourf&conc=snow`;
 
+// BMKG prakiraan cuaca per kelurahan (kode wilayah tingkat IV). 21.71.10.1003 = Teluk
+// Tering, Kec. Batam Kota (Batam Center) — dipakai sebagai wakil pusat kota. CORS *, tapi
+// app menariknya lewat server (lihat app/api/prakiraan).
+export const BMKG_FORECAST = "https://api.bmkg.go.id/publik/prakiraan-cuaca?adm4=21.71.10.1003";
+export const BMKG_FORECAST_PLACE = "Batam Kota";
+
 // CARTO raster basemap (wajib ?key= sejak 2026-09; key di env, lihat lib/radar.ts).
 export const CARTO_SUBDOMAINS = ["a", "b", "c", "d"];
 export const cartoTile = (style: string, keyQuery: string) =>
