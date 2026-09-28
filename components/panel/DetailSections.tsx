@@ -66,9 +66,12 @@ export function KecTable({
       )}
       <p className="d-note">
         Dihitung dari radar MSS (1 piksel ≈ 1 km²) di atas daratan tiap kecamatan, jadi hujan di laut tidak
-        ikut. Kecamatan disebut hujan kalau luasnya minimal {KEC_RAIN_MIN_KM2} km². Mencakup {KAB_LIST}; Natuna
-        dan Anambas di luar jangkauan radar. Ini perkiraan radar dari pantulan butiran air, jadi bisa beda
-        dengan yang kamu rasakan.
+        ikut. Kecamatan disebut hujan kalau luasnya minimal {KEC_RAIN_MIN_KM2} km².{" "}
+        {total > 0 &&
+          (scope === "batam"
+            ? `Tabel ini berisi ${total} kecamatan Kota Batam; pilih Wilayah Kepri untuk melihat Tanjungpinang, Bintan, Karimun, dan Lingga. `
+            : `Mencakup ${KAB_LIST}; Natuna, Anambas, dan Kecamatan Tambelan (Kabupaten Bintan) di luar jangkauan radar. `)}
+        Ini perkiraan radar dari pantulan butiran air, jadi bisa beda dengan yang kamu rasakan.
       </p>
     </section>
   );

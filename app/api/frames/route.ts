@@ -2,6 +2,7 @@ import type { Frame } from "@/lib/radar";
 import type { EchoSummary, FramesResponse } from "@/lib/api-types";
 import { MSS_FILE_BASE } from "@/lib/sources";
 import { batamStats, type EchoStats } from "@/lib/echo";
+import { KOTA_UTAMA } from "@/lib/kecamatan";
 
 // Citra radar 240km MSS terbit tiap 5 MENIT dengan jeda terbit ~8 menit. Daripada nebak
 // jeda pakai angka tetap, server PROBE file paling baru yang BENERAN udah terbit, lalu
@@ -178,7 +179,10 @@ async function echoSummary(frames: Frame[]): Promise<EchoSummary | null> {
     level: now.level,
     byClass: now.byClass,
     landKm2: now.landKm2,
-    kec: now.kec,
+    // `kec` akar tetap KOTA BATAM saja (12) seperti respons lama: tab/PWA yang masih memakai
+    // bundel lama terus mem-polling rute ini dan membaca `kec` sebagai kecamatan Batam.
+    // Daftar lengkap Kepri ada di `region.kec`.
+    kec: now.kec.filter((k) => k.kab === KOTA_UTAMA),
     lastTs,
     lookbackMin: ECHO_LOOKBACK * STEP_MIN,
     region: {
@@ -187,6 +191,7 @@ async function echoSummary(frames: Frame[]): Promise<EchoSummary | null> {
       level: now.region.level,
       landKm2: now.region.landKm2,
       lastTs: regionLastTs,
+      kec: now.kec,
     },
   };
 }

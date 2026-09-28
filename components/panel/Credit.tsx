@@ -25,7 +25,7 @@ export default function Credit() {
       <a href="https://geoservices.big.go.id/rbi/rest/services/BATASWILAYAH/BATAS_KECAMATAN_AR/MapServer" {...ext}>
         Badan Informasi Geospasial
       </a>{" "}
-      (edisi Juni 2026, disederhanakan untuk tampilan), Kamera Pemko Batam, Peta ©{" "}
+      (Edisi Juni 2026, Disederhanakan untuk Tampilan), Kamera Pemko Batam, Peta ©{" "}
       <a href="https://www.openstreetmap.org/copyright" {...ext}>
         OpenStreetMap
       </a>{" "}

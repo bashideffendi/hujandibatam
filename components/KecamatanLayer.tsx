@@ -5,7 +5,7 @@ import L from "leaflet";
 import { useEffect, useMemo, useState } from "react";
 import { GeoJSON, Marker, Pane, useMap, useMapEvents } from "react-leaflet";
 import { KOTA_UTAMA, levelRank } from "@/lib/kecamatan";
-import type { ThemeMode } from "@/lib/radar";
+import { PLACES, type ThemeMode } from "@/lib/radar";
 import type { EchoLevel } from "@/lib/status";
 
 // Batas 52 kecamatan di Batam, Tanjungpinang, Bintan, Karimun, dan Lingga (Badan Informasi
@@ -32,7 +32,10 @@ const loadGeo = () =>
       throw e;
     }));
 
-const LINES_MIN_ZOOM = 8; // view "Kepri" di HP ±z8; "Luas" (z7) terlalu jauh: cuma jadi coretan
+/** arsiran & label kecamatan hujan: view "Kepri" di HP kecil jatuh ke z7, jadi tetap tampil */
+const RAIN_MIN_ZOOM = 7;
+/** garis batas semua kecamatan: di z7 ("Luas") cuma jadi coretan */
+const LINES_MIN_ZOOM = 8;
 const LABELS_ALL_ZOOM = 11;
 /** di zoom kecil label hujan cukup nama (kelasnya ada di panel) supaya tak saling tumpuk */
 const FULL_PILL_ZOOM = 11;
@@ -125,7 +128,7 @@ export default function KecamatanLayer({ rainy, showRain, theme }: Props) {
   const layout = useMemo(() => {
     const pills: KecFeature[] = [];
     const dots: KecFeature[] = [];
-    if (!geo || zoom < LINES_MIN_ZOOM) return { pills, dots };
+    if (!geo || zoom < RAIN_MIN_ZOOM) return { pills, dots };
     const order = [...rainLevels.keys()];
     const cands = geo.features
       .filter((f) => f.properties.label && (zoom >= LABELS_ALL_ZOOM || rainLevels.has(f.properties.code)))
@@ -138,7 +141,13 @@ export default function KecamatanLayer({ rainy, showRain, theme }: Props) {
           b.f.properties.areaKm2 - a.f.properties.areaKm2,
       );
     const family = getComputedStyle(map.getContainer()).fontFamily;
-    const boxes: [number, number, number, number][] = [];
+    // label kota (PLACES di RadarMap: titik + tooltip kanan, .place-label 10.5px/600, jarak
+    // 6 px offset + 6 px margin Leaflet) sudah terpasang lebih dulu → ruangnya dipesan
+    const boxes: [number, number, number, number][] = PLACES.map((pl) => {
+      const p = map.project([pl.lat, pl.lng], zoom);
+      const w = textWidth(pl.name, `600 10.5px ${family}`) + pl.name.length * 0.42;
+      return [p.x - 4, p.y - 9, p.x + 14 + w, p.y + 9];
+    });
     for (const { f, level } of cands) {
       const p = map.project(f.properties.label as [number, number], zoom);
       const [w, h] = labelSize(f.properties.name, level, full, family);
@@ -148,16 +157,24 @@ export default function KecamatanLayer({ rainy, showRain, theme }: Props) {
         p.x + w / 2 + LABEL_GAP,
         p.y + h / 2 + LABEL_GAP,
       ];
-      const hit = boxes.some((b) => box[0] < b[2] && box[2] > b[0] && box[1] < b[3] && box[3] > b[1]);
-      if (!hit) {
+      const hits = (q: number[]) => boxes.some((b) => q[0] < b[2] && q[2] > b[0] && q[1] < b[3] && q[3] > b[1]);
+      if (!hits(box)) {
         boxes.push(box);
         pills.push(f);
-      } else if (level) dots.push(f);
+      } else if (level) {
+        // titik kelas hanya kalau tak jatuh di atas label terpasang (kalau jatuh, arsirannya
+        // tetap menandai); ruangnya dipesan supaya label berikutnya tak menutupinya
+        const dot: [number, number, number, number] = [p.x - 7, p.y - 7, p.x + 7, p.y + 7];
+        if (!hits(dot)) {
+          boxes.push(dot);
+          dots.push(f);
+        }
+      }
     }
     return { pills, dots };
   }, [geo, zoom, rainLevels, full, map]);
 
-  if (!geo || zoom < LINES_MIN_ZOOM) return null;
+  if (!geo || zoom < RAIN_MIN_ZOOM) return null;
 
   return (
     <>
@@ -177,14 +194,16 @@ export default function KecamatanLayer({ rainy, showRain, theme }: Props) {
           />
         </Pane>
       )}
-      <Pane name="kec-lines" style={{ zIndex: 420, pointerEvents: "none" }}>
-        <GeoJSON
-          key={`base-${theme}`}
-          data={geo as unknown as FeatureCollection}
-          interactive={false}
-          style={{ color: LINE[theme], weight: 1, fill: false, lineJoin: "round" }}
-        />
-      </Pane>
+      {zoom >= LINES_MIN_ZOOM && (
+        <Pane name="kec-lines" style={{ zIndex: 420, pointerEvents: "none" }}>
+          <GeoJSON
+            key={`base-${theme}`}
+            data={geo as unknown as FeatureCollection}
+            interactive={false}
+            style={{ color: LINE[theme], weight: 1, fill: false, lineJoin: "round" }}
+          />
+        </Pane>
+      )}
       <Pane name="kec-labels" style={{ zIndex: 430, pointerEvents: "none" }}>
         {layout.dots.map((f) => {
           const level = rainLevels.get(f.properties.code) as EchoLevel;
@@ -195,6 +214,7 @@ export default function KecamatanLayer({ rainy, showRain, theme }: Props) {
               icon={dotIcon(level)}
               interactive={false}
               keyboard={false}
+              zIndexOffset={2000}
             />
           );
         })}

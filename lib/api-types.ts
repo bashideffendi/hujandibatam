@@ -14,7 +14,7 @@ export type EchoSummary = {
   byClass?: { ringan: number; sedang: number; lebat: number };
   /** luas daratan Kota Batam yang terpetakan ke piksel radar (km²) */
   landKm2?: number;
-  /** hujan per kecamatan (km², 1 desimal): semua kecamatan Kepri dalam jangkauan radar */
+  /** hujan per kecamatan KOTA BATAM (km², 1 desimal) — tetap Batam saja demi klien lama */
   kec?: KecEcho[];
   /** ringkasan seluruh Kepri dalam jangkauan (Batam, Tanjungpinang, Bintan, Karimun, Lingga) */
   region?: {
@@ -24,6 +24,8 @@ export type EchoSummary = {
     landKm2: number;
     /** ts (SGT) frame terakhir yang ada hujannya di Kepri dalam jendela lookback */
     lastTs: string | null;
+    /** hujan per kecamatan: SEMUA kecamatan Kepri dalam jangkauan radar */
+    kec?: KecEcho[];
   };
   /** ts (SGT) frame terakhir yang ada hujannya dalam jendela lookback; null = tidak ada */
   lastTs: string | null;

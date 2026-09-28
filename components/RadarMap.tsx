@@ -157,9 +157,10 @@ export default function RadarMap() {
   // Padding fit dinamis: ukur panel & topbar asli biar wilayah selalu ke-frame penuh, nggak
   // ketutup. HP landscape: panel side-sheet kanan. Layar lebar: panel di kiri bawah, jadi
   // peta di-frame ke ruang kanannya.
-  // ignoreDetail: framing VIEW (MapController) di mode CCTV mengabaikan lembar Daftar yang
-  // terbuka supaya peta kamera tetap dibuka di z11; zoom ke kamera & panInside memakai
-  // padding penuh (kamera jangan diterbangkan ke bawah lembar).
+  // ignoreDetail: framing VIEW (MapController) mengabaikan Detail/Daftar yang terbuka —
+  // panel ber-Detail di HP bisa setinggi layar, jadi wilayah di-frame seolah Detail tertutup
+  // (peta kamera tetap dibuka di z11; menutup Detail tak perlu fit ulang). Zoom ke kamera &
+  // panInside memakai padding penuh (kamera jangan diterbangkan ke bawah lembar).
   const getPadding = useCallback((ignoreDetail = false): Padding => {
     const panel = panelRef.current;
     const panelH = panel?.offsetHeight ?? 220;
@@ -168,12 +169,13 @@ export default function RadarMap() {
     if (isSmallLandscape()) return { paddingTopLeft: [14, topH + 8], paddingBottomRight: [panelW + 24, 14] };
     // layar lebar: sidebar kiri setinggi layar (tanpa bilah atas) → peta di-frame ke kanannya
     if (isWide()) return { paddingTopLeft: [panelW + 24, 24], paddingBottomRight: [24, 24] };
-    // CCTV: lembar Daftar yang terbuka jangan ikut menyempitkan framing (peta kamera harus
-    // tetap dibuka di z11 dengan kelompok ≤9).
+    // tinggi panel TANPA Detail = posisi atas Detail (offsetParent-nya .panel) + padding bawah
     const det = panel?.querySelector<HTMLElement>("#panel-detail");
-    const detH =
-      ignoreDetail && det && panel?.dataset.detail === "true" && panel.dataset.mode === "cctv" ? det.offsetHeight + 12 : 0;
-    return { paddingTopLeft: [14, topH + 8], paddingBottomRight: [14, Math.round(panelH - detH) + 24] };
+    const base =
+      ignoreDetail && det && panel?.dataset.detail === "true" ? Math.min(panelH, det.offsetTop + 14) : panelH;
+    // padding atas+bawah tak boleh menghabiskan tinggi peta (fitBounds lalu lari ke zoom batas)
+    const bottom = Math.min(Math.round(base) + 24, window.innerHeight - (topH + 8) - 120);
+    return { paddingTopLeft: [14, topH + 8], paddingBottomRight: [14, Math.max(24, bottom)] };
   }, []);
   const getViewPadding = useCallback(() => getPadding(true), [getPadding]);
   const getFullPadding = useCallback(() => getPadding(false), [getPadding]);

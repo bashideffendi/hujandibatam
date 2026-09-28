@@ -183,9 +183,13 @@ export function radarView(a: {
 /** Wilayah peta → cakupan jawaban: "Batam" = Kota Batam; "Kepri"/"Luas" = semua kab/kota Kepri. */
 export const scopeOf = (view: string): RainScope => (view === "batam" ? "batam" : "kepri");
 
+/** Daftar kecamatan untuk satu cakupan: Kepri dari `region.kec`, Batam dari `kec` akar. */
+const kecList = (e: EchoSummary | null | undefined, scope: RainScope): KecEcho[] | undefined =>
+  (scope === "kepri" ? (e?.region?.kec ?? e?.kec) : e?.kec)?.filter((k) => inScope(k, scope));
+
 /** Data echo yang dipersempit ke satu cakupan. Respons lama tanpa `region` → pakai data Batam. */
 function scoped(e: EchoSummary, scope: RainScope): { kec: KecEcho[] | null; near: boolean; lastTs: string | null } {
-  const kec = e.kec ? e.kec.filter((k) => inScope(k, scope)) : null;
+  const kec = kecList(e, scope) ?? null;
   if (scope === "kepri" && e.region) return { kec, near: e.region.near, lastTs: e.region.lastTs };
   return { kec, near: e.near, lastTs: e.lastTs };
 }
@@ -388,10 +392,11 @@ export type KecGroup = { kab: string; rows: KecRow[]; rainy: number };
  * kelompok yang hujan di atas (terderas, terluas), sisanya urut nama.
  */
 export function kecTable(e: EchoSummary | null, scope: RainScope = "batam"): KecGroup[] {
-  if (!e?.kec) return [];
+  const list = kecList(e, scope);
+  if (!list) return [];
   const rank = { lebat: 3, sedang: 2, ringan: 1 } as const;
   const groups = new Map<string, (KecRow & { rain: number })[]>();
-  for (const k of e.kec) {
+  for (const k of list) {
     if (!inScope(k, scope)) continue;
     const level = kecLevel(k);
     const row = {
@@ -423,7 +428,7 @@ export function kecTable(e: EchoSummary | null, scope: RainScope = "batam"): Kec
 
 /** Kode kecamatan yang sedang hujan (semua Kepri) beserta kelasnya — untuk arsiran & label peta. */
 export function rainyMap(e: EchoSummary | null): Map<string, EchoLevel> {
-  return new Map(rainyKec(e?.kec).map((k) => [k.code, k.level]));
+  return new Map(rainyKec(kecList(e, "kepri")).map((k) => [k.code, k.level]));
 }
 
 /** Kab/kota dalam jangkauan (untuk teks penjelasan). */

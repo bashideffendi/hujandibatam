@@ -1883,6 +1883,13 @@ input[type="range"].rng:disabled {
     border-bottom: 1px solid var(--panel-border);
   }
 }
+/* HP tegak: Detail terbuka → panel memanjang sampai bilah atas, atribusi (yang duduk di atas
+   panel) akan menumpuk bilah atas. Sembunyikan; kredit lengkap ada di bagian bawah Detail. */
+@media (max-width: 899px) and (min-height: 481px) {
+  .app-root:has(.panel[data-detail="true"]:not([data-collapsed="true"])) .leaflet-control-attribution {
+    visibility: hidden;
+  }
+}
 /* HP pendek: strip BMKG jadi satu baris "Nanti: …" */
 @media (max-width: 899px) and (max-height: 700px) {
   .fc-full {
@@ -2061,6 +2068,12 @@ input[type="range"].rng:disabled {
     max-height: calc(100dvh - 74px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
     overflow-y: auto;
     animation: none;
+  }
+  /* batas tinggi side-sheet menang atas aturan Detail/daftar HP tegak & sidebar laptop
+     (spesifisitas atribut lebih tinggi dari .panel saja) */
+  .panel[data-detail],
+  .panel[data-listing] {
+    max-height: calc(100dvh - 74px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   }
   .panel-detail {
     max-height: none;
