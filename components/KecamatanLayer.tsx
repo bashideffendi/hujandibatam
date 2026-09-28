@@ -8,9 +8,11 @@ import type { ThemeMode } from "@/lib/radar";
 import type { EchoLevel } from "@/lib/status";
 
 // Batas 12 kecamatan Kota Batam (Satu Data Kota Batam, disederhanakan ±33 m oleh
-// scripts/build-kecamatan.mjs) di atas radar. Kecamatan yang sedang hujan digaris tebal dan
-// namanya selalu tampil; nama kecamatan lain baru muncul di zoom ≥11 supaya HP tak penuh label.
-// Geometri (±60 KB) dimuat terpisah, hanya saat mode Hujan dibuka.
+// scripts/build-kecamatan.mjs) di atas radar. Kecamatan yang sedang hujan ditandai dengan
+// DUA hal yang terbaca tanpa legenda: arsiran tipis warna kelas hujannya (di BAWAH radar,
+// jadi warna radar tetap asli) + label bertulisan "Galang · Hujan Ringan". Garis batas semua
+// kecamatan sama tipisnya. Nama kecamatan lain baru muncul di zoom ≥11 supaya HP tak penuh
+// label. Geometri (±60 KB) dimuat terpisah, hanya saat mode Hujan dibuka.
 
 type KecFeature = {
   type: "Feature";
@@ -30,28 +32,32 @@ const loadGeo = () =>
 
 const LINES_MIN_ZOOM = 9; // view "Luas" (z8) terlalu jauh: garisnya cuma jadi coretan
 const LABELS_ALL_ZOOM = 11;
+/** di zoom kecil label hujan cukup nama (kelasnya ada di panel) supaya tak saling tumpuk */
+const FULL_PILL_ZOOM = 11;
 
 // Warna garis per tema. SVG tak bisa membaca var() CSS di atribut stroke, jadi ditulis di sini.
-const LINE: Record<ThemeMode, { base: string; rain: string }> = {
-  light: { base: "rgba(21, 23, 28, 0.42)", rain: "rgba(21, 23, 28, 0.9)" },
-  dark: { base: "rgba(255, 255, 255, 0.36)", rain: "rgba(255, 255, 255, 0.92)" },
+const LINE: Record<ThemeMode, string> = {
+  light: "rgba(21, 23, 28, 0.42)",
+  dark: "rgba(255, 255, 255, 0.36)",
 };
+// Arsiran kecamatan hujan = warna titik kelas (sama dengan --dot-* di globals.css).
+const FILL: Record<EchoLevel, string> = { ringan: "#00babf", sedang: "#ffa500", lebat: "#e50000" };
+const LEVEL_WORD: Record<EchoLevel, string> = { ringan: "Hujan Ringan", sedang: "Hujan Sedang", lebat: "Hujan Lebat" };
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
-function labelIcon(name: string, level: EchoLevel | undefined) {
-  const dot = level ? `<i class="kec-dot" data-level="${level}"></i>` : "";
-  return L.divIcon({
-    className: "kec-label-icon",
-    html: `<span class="kec-label${level ? " is-rain" : ""}">${dot}${esc(name)}</span>`,
-    iconSize: [0, 0],
-    iconAnchor: [0, 0],
-  });
+function labelIcon(name: string, level: EchoLevel | undefined, full: boolean) {
+  const html = level
+    ? `<span class="kec-pill" data-level="${level}"><i class="kec-dot" data-level="${level}"></i><b>${esc(name)}</b>${
+        full ? `<span>${LEVEL_WORD[level]}</span>` : ""
+      }</span>`
+    : `<span class="kec-label">${esc(name)}</span>`;
+  return L.divIcon({ className: "kec-label-icon", html, iconSize: [0, 0], iconAnchor: [0, 0] });
 }
 
 type Props = {
   /** kecamatan yang sedang hujan → kelasnya */
   rainy: ReadonlyMap<string, EchoLevel>;
-  /** sorot kecamatan hujan (hanya saat peta menampilkan citra terbaru) */
+  /** tandai kecamatan hujan (hanya saat peta menampilkan citra terbaru) */
   showRain: boolean;
   theme: ThemeMode;
 };
@@ -74,44 +80,55 @@ export default function KecamatanLayer({ rainy, showRain, theme }: Props) {
 
   // kunci stabil: Map baru tiap render induk tak boleh membuat ulang layer
   const rainKey = showRain ? [...rainy.entries()].map(([k, v]) => `${k}:${v}`).sort().join("|") : "";
+  const rainLevels = useMemo(
+    () => new Map(rainKey ? rainKey.split("|").map((e) => e.split(":") as [string, EchoLevel]) : []),
+    [rainKey],
+  );
   const rainGeo = useMemo<KecGeo | null>(() => {
-    if (!geo || !rainKey) return null;
-    const names = new Set(rainKey.split("|").map((e) => e.split(":")[0]));
-    return { ...geo, features: geo.features.filter((f) => names.has(f.properties.name)) };
-  }, [geo, rainKey]);
+    if (!geo || !rainLevels.size) return null;
+    return { ...geo, features: geo.features.filter((f) => rainLevels.has(f.properties.name)) };
+  }, [geo, rainLevels]);
 
   if (!geo || zoom < LINES_MIN_ZOOM) return null;
-  const color = LINE[theme];
   const labels = geo.features.filter(
-    (f) => f.properties.label && (zoom >= LABELS_ALL_ZOOM || (showRain && rainy.has(f.properties.name))),
+    (f) => f.properties.label && (zoom >= LABELS_ALL_ZOOM || rainLevels.has(f.properties.name)),
   );
+  const full = zoom >= FULL_PILL_ZOOM;
 
   return (
     <>
+      {/* arsiran di BAWAH radar (overlayPane z400) → warna radar tidak tertutup */}
+      {rainGeo && (
+        <Pane name="kec-fill" style={{ zIndex: 350, pointerEvents: "none" }}>
+          <GeoJSON
+            key={`fill-${theme}-${rainKey}`}
+            data={rainGeo as unknown as FeatureCollection}
+            interactive={false}
+            style={(f) => ({
+              stroke: false,
+              fill: true,
+              fillColor: FILL[rainLevels.get((f?.properties as { name: string }).name) ?? "ringan"],
+              fillOpacity: theme === "dark" ? 0.26 : 0.2,
+            })}
+          />
+        </Pane>
+      )}
       <Pane name="kec-lines" style={{ zIndex: 420, pointerEvents: "none" }}>
         <GeoJSON
           key={`base-${theme}`}
           data={geo as unknown as FeatureCollection}
           interactive={false}
-          style={{ color: color.base, weight: 1, fill: false, lineJoin: "round" }}
+          style={{ color: LINE[theme], weight: 1, fill: false, lineJoin: "round" }}
         />
-        {rainGeo && rainGeo.features.length > 0 && (
-          <GeoJSON
-            key={`rain-${theme}-${rainKey}`}
-            data={rainGeo as unknown as FeatureCollection}
-            interactive={false}
-            style={{ color: color.rain, weight: 2, fill: false, lineJoin: "round" }}
-          />
-        )}
       </Pane>
       <Pane name="kec-labels" style={{ zIndex: 430, pointerEvents: "none" }}>
         {labels.map((f) => {
-          const level = showRain ? rainy.get(f.properties.name) : undefined;
+          const level = rainLevels.get(f.properties.name);
           return (
             <Marker
-              key={`${f.properties.name}-${level ?? "-"}`}
+              key={`${f.properties.name}-${level ?? "-"}-${full ? 1 : 0}`}
               position={f.properties.label as [number, number]}
-              icon={labelIcon(f.properties.name, level)}
+              icon={labelIcon(f.properties.name, level, full)}
               interactive={false}
               keyboard={false}
             />

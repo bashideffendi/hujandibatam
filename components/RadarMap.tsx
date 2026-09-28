@@ -61,9 +61,10 @@ import CctvBlock from "./panel/CctvBlock";
 import Conditions from "./panel/Conditions";
 import { Footer, Transport, ViewSelector } from "./panel/Controls";
 import Credit from "./panel/Credit";
-import { ForecastInfo, KecTable, PerairanInfo } from "./panel/DetailSections";
+import { ForecastSection, KecTable, PerairanInfo } from "./panel/DetailSections";
 import ForecastStrip from "./panel/ForecastStrip";
 import { OfsCategories, OfsScale, RainOpacity, RainScale } from "./panel/Legends";
+import SidebarHead from "./panel/SidebarHead";
 import { Answer, WarnRow } from "./panel/Status";
 
 // ---------------------------------------------------------------------------
@@ -164,11 +165,13 @@ export default function RadarMap() {
     const panelW = panel?.offsetWidth ?? 320;
     const topH = topbarRef.current?.offsetHeight ?? 64;
     if (isSmallLandscape()) return { paddingTopLeft: [14, topH + 8], paddingBottomRight: [panelW + 24, 14] };
-    if (isWide()) return { paddingTopLeft: [panelW + 40, topH + 8], paddingBottomRight: [24, 24] };
+    // layar lebar: sidebar kiri setinggi layar (tanpa bilah atas) → peta di-frame ke kanannya
+    if (isWide()) return { paddingTopLeft: [panelW + 24, 24], paddingBottomRight: [24, 24] };
     // CCTV: lembar Daftar yang terbuka jangan ikut menyempitkan framing (peta kamera harus
     // tetap dibuka di z11 dengan kelompok ≤9).
     const det = panel?.querySelector<HTMLElement>("#panel-detail");
-    const detH = ignoreDetail && det && !det.hidden && panel?.dataset.mode === "cctv" ? det.offsetHeight + 12 : 0;
+    const detH =
+      ignoreDetail && det && panel?.dataset.detail === "true" && panel.dataset.mode === "cctv" ? det.offsetHeight + 12 : 0;
     return { paddingTopLeft: [14, topH + 8], paddingBottomRight: [14, Math.round(panelH - detH) + 24] };
   }, []);
   const getViewPadding = useCallback(() => getPadding(true), [getPadding]);
@@ -335,6 +338,15 @@ export default function RadarMap() {
   const rain = rainAnswer({ echo: radar.echo, frames: radar.frames, rv, status: radar.status, offline, now });
   const rainCap = rainCaption(rv, now);
   const strip = forecastStrip(forecast.data, forecast.error, now);
+  const tiles = forecastStrip(forecast.data, forecast.error, now, 4);
+  const rainyKecs = rainyMap(radar.echo);
+  const showKec = rv.isLatest && !rv.currentBroken && radar.status === "ok";
+  // baris kecil di atas jawaban (hanya tampil di sidebar laptop)
+  const rainEyebrow = rv.latest
+    ? rv.fresh
+      ? `Radar MSS · Terbaru ${rv.latest.time} WIB`
+      : `Radar MSS · ${rv.latestWhen}`
+    : "Radar MSS";
   const ov = ofsView({
     ofs: ofs.ofs,
     idx: ofs.idx,
@@ -344,6 +356,7 @@ export default function RadarMap() {
     offline,
   });
   const ombak = ofsAnswer(ofs.perairan, ofs.perairanError, ov, offline);
+  const ombakEyebrow = `Model Gelombang BMKG${ov.wib ? ` · Peta ${ov.wib.time} WIB` : ""}`;
   const ombakCap = ofsCaption(ov);
   const cctv = cctvAnswer(MAPPED_CAMS.length, deadCams.size);
 
@@ -401,11 +414,7 @@ export default function RadarMap() {
           {/* Batas 12 kecamatan Kota Batam; yang sedang hujan disorot hanya saat peta
               menampilkan citra terbaru (hujan per kecamatan dihitung dari citra itu). */}
           {mode === "hujan" && (
-            <KecamatanLayer
-              rainy={rainyMap(radar.echo)}
-              showRain={rv.isLatest && !rv.currentBroken && radar.status === "ok"}
-              theme={theme}
-            />
+            <KecamatanLayer rainy={rainyKecs} showRain={showKec} theme={theme} />
           )}
           {/* Field gelombang OFS (double-buffer, nggak berkedip) di atas basemap */}
           {mode === "ombak" && ofs.ofs?.baserun && ov.valid && (
@@ -479,10 +488,24 @@ export default function RadarMap() {
           mode === "hujan" ? rain.mini : mode === "ombak" ? ombak.mini : `${MAPPED_CAMS.length} Kamera Lalu Lintas`
         }
         miniDot={mode === "hujan" ? rain.dot : null}
+        head={
+          <SidebarHead
+            theme={theme}
+            onToggleTheme={toggleTheme}
+            onShare={onShare}
+            canInstall={canInstall}
+            onInstall={install}
+          />
+        }
       >
         {mode === "hujan" && (
           <>
-            <Answer a={rain} onRetry={rain.retry && !offline ? radar.load : undefined} />
+            <Answer
+              a={rain}
+              eyebrow={rainEyebrow}
+              live={rv.fresh}
+              onRetry={rain.retry && !offline ? radar.load : undefined}
+            />
             <RainScale />
             {forecast.data && <ForecastStrip place={forecast.data.place} strip={strip} />}
             <Transport
@@ -504,8 +527,13 @@ export default function RadarMap() {
 
         {mode === "ombak" && (
           <>
-            {ombak.warning && <WarnRow text={ombak.warning} />}
-            <Answer a={ombak} onRetry={ombak.retry ? () => ofs.load(true) : undefined} />
+            {ombak.warning && <WarnRow text={ombak.warning} chip />}
+            <Answer
+              a={ombak}
+              eyebrow={ombakEyebrow}
+              live={ov.ready && ov.phase === "now" && !ov.problem}
+              onRetry={ombak.retry ? () => ofs.load(true) : undefined}
+            />
             {ov.problem && <WarnRow text={ov.problem} />}
             <OfsScale />
             <Transport
@@ -552,14 +580,15 @@ export default function RadarMap() {
           onToggleDetail={toggleDetail}
         />
 
+        {/* Detail: di HP dilipat (tombol Detail/Daftar); di laptop selalu tampil di sidebar. */}
         {(
-          <div id="panel-detail" className="panel-detail" hidden={!detail}>
+          <div id="panel-detail" className="panel-detail">
             {mode === "hujan" && (
               <>
                 {radar.frames.length > 0 && <KecTable echo={radar.echo} when={rv.latestWhen} fresh={rv.fresh} />}
-                <RainOpacity opacity={opacity} onOpacity={setOpacity} />
-                <ForecastInfo fc={forecast.data} strip={strip} />
+                <ForecastSection fc={forecast.data} tiles={tiles} note={strip.note} />
                 <Conditions data={conditions.data} error={conditions.error} />
+                <RainOpacity opacity={opacity} onOpacity={setOpacity} />
               </>
             )}
             {mode === "ombak" && (

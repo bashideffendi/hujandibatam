@@ -331,19 +331,30 @@ export function rainCaption(rv: RadarView, now: number): Caption {
   };
 }
 
-/** Tabel "Hujan per Kecamatan" di Detail: 12 baris urut nama. */
+/** "Hujan per Kecamatan": 12 kecamatan, yang hujan dulu (terderas, terluas), sisanya urut nama. */
 export function kecTable(e: EchoSummary | null): { name: string; level: EchoLevel | null; text: string }[] {
   if (!e?.kec) return [];
-  return [...e.kec]
-    .sort((a, b) => a.name.localeCompare(b.name, "id"))
-    .map((k) => {
-      const level = kecLevel(k);
-      return {
-        name: k.name,
-        level,
-        text: level ? `${LEVEL_TEXT[level]} · ${fmtM(Math.max(1, Math.round(k.rain)))} km²` : "Tidak Hujan",
-      };
-    });
+  const rows = e.kec.map((k) => {
+    const level = kecLevel(k);
+    return {
+      name: k.name,
+      level,
+      rain: k.rain,
+      text: level ? `${LEVEL_TEXT[level].replace("Hujan ", "")} · ${fmtM(Math.max(1, Math.round(k.rain)))} km²` : "Tidak Hujan",
+    };
+  });
+  const rank = { lebat: 3, sedang: 2, ringan: 1 } as const;
+  return rows
+    .sort((a, b) =>
+      a.level && b.level
+        ? rank[b.level] - rank[a.level] || b.rain - a.rain
+        : a.level
+          ? -1
+          : b.level
+            ? 1
+            : a.name.localeCompare(b.name, "id"),
+    )
+    .map(({ name, level, text }) => ({ name, level, text }));
 }
 
 /** Nama kecamatan yang sedang hujan beserta kelasnya (untuk garis & label di peta). */

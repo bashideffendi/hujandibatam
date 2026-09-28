@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Fraunces, Inter } from "next/font/google";
+import { Fraunces, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import "leaflet/dist/leaflet.css";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
@@ -7,8 +7,14 @@ import { CARTO_PRECONNECT, MSS_HOST, SITE_URL } from "@/lib/sources";
 
 // Font di-self-host lewat next/font: nggak ada request ke Google dari browser pengguna,
 // nggak ada CSS lintas-origin yang render-blocking, dan wordmark nggak "loncat" (FOUT).
+// UI: Plus Jakarta Sans (dirancang di Jakarta; angka tabular rapi) — 400/500/600/700.
 // Fraunces cuma dipakai wordmark (weight 500, "di" italic) — jangan tambah weight lain.
-const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600"], display: "swap", variable: "--font-inter" });
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+  variable: "--font-ui",
+});
 const fraunces = Fraunces({
   subsets: ["latin"],
   weight: ["500"],
@@ -79,7 +85,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="id" className={`${inter.variable} ${fraunces.variable}`} suppressHydrationWarning>
+    <html lang="id" className={`${jakarta.variable} ${fraunces.variable}`} suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
         {CARTO_PRECONNECT.map((h) => (

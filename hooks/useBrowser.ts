@@ -3,6 +3,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 /** Jam berjalan (ms epoch) yang di-update tiap `ms` — buat label "X mnt lalu". */
+/** true selama media query cocok (mis. layar lebar ≥900 px → panel jadi sidebar). */
+export function useMedia(query: string): boolean {
+  const [on, setOn] = useState(() => typeof window !== "undefined" && !!window.matchMedia?.(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia?.(query);
+    if (!mq) return;
+    const apply = () => setOn(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, [query]);
+  return on;
+}
+
 export function useNow(ms: number): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {

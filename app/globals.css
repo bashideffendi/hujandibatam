@@ -17,7 +17,9 @@
   --panel-border: rgba(20, 24, 33, 0.1);
   --panel-shadow: 0 8px 28px rgba(16, 20, 30, 0.14);
   --text: #15171c;
+  --text-2: #2e3440;
   --text-muted: #5b616e;
+  --warn-bg: #fff3dc;
   --accent: #2f6fb3;
   --accent-soft: rgba(47, 111, 179, 0.16);
   --on-accent: #ffffff;
@@ -53,7 +55,9 @@
   --panel-border: rgba(255, 255, 255, 0.1);
   --panel-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
   --text: #f2f3f5;
+  --text-2: rgba(255, 255, 255, 0.84);
   --text-muted: rgba(255, 255, 255, 0.64);
+  --warn-bg: rgba(242, 180, 92, 0.13);
   --accent: #6ea2dd;
   --accent-soft: rgba(110, 162, 221, 0.16);
   --on-accent: #0c1018;
@@ -105,7 +109,7 @@ body {
   height: 100%;
   margin: 0;
   background: var(--map-bg, #0c0d10);
-  font-family: var(--font-inter), "Inter", system-ui, sans-serif;
+  font-family: var(--font-ui), "Plus Jakarta Sans", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   /* tarik-ke-bawah di panel jangan memicu pull-to-refresh Chrome / bounce iOS */
   overscroll-behavior: none;
@@ -193,9 +197,31 @@ h4 {
   letter-spacing: 0.02em;
   text-shadow: var(--place-shadow);
 }
-.kec-label.is-rain {
+/* kecamatan yang hujan: pil bertulisan "Galang · Hujan Ringan" */
+.kec-pill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  padding: 5px 10px 5px 8px;
+  border-radius: 999px;
+  background: var(--panel-solid);
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
   color: var(--text);
-  font-size: 11.5px;
+  font-size: 12px;
+  line-height: 16px;
+}
+.kec-pill b {
+  font-weight: 700;
+}
+.kec-pill span {
+  color: var(--text-muted);
+  font-weight: 500;
 }
 .kec-dot {
   width: 7px;
@@ -395,7 +421,8 @@ h4 {
   border: 1px solid var(--panel-border);
   border-radius: var(--r-sheet);
   box-shadow: var(--panel-shadow);
-  padding: 0 16px 12px;
+  --pad: 18px;
+  padding: 0 var(--pad) 14px;
   color: var(--text);
   font-variant-numeric: tabular-nums;
   animation: rise 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) both;
@@ -492,13 +519,33 @@ h4 {
 .answer {
   display: flex;
   align-items: center;
-  gap: 9px;
-  font-size: 22px;
-  line-height: 28px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  gap: 10px;
+  margin-top: 2px;
+  font-size: 26px;
+  line-height: 32px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
   color: var(--text);
   text-wrap: balance;
+}
+/* baris kecil di atas jawaban (sumber & jam) — hanya di sidebar laptop */
+.eyebrow {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--live-dot);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--live-dot) 22%, transparent);
 }
 /* menerima fokus lewat skrip (sesudah Coba Lagi / Perbesar Peta), bukan kontrol */
 .answer:focus {
@@ -511,8 +558,8 @@ h4 {
   color: var(--stale-text);
 }
 .answer-dot {
-  width: 9px;
-  height: 9px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   flex: none;
   background: var(--text-muted);
@@ -527,10 +574,11 @@ h4 {
   background: var(--dot-lebat);
 }
 .context {
-  margin: 4px 0 0;
-  font-size: 13px;
-  line-height: 18px;
-  color: var(--text-muted);
+  margin: 3px 0 0;
+  font-size: 15px;
+  line-height: 21px;
+  font-weight: 500;
+  color: var(--text-2);
 }
 .retry-btn {
   margin-left: 8px;
@@ -548,6 +596,18 @@ h4 {
 }
 .answer-block + .warn-row {
   margin: 8px 0 0;
+}
+/* peringatan dini BMKG: label berlatar di atas jawaban */
+.warn-row.warn-chip {
+  align-self: flex-start;
+  align-items: center;
+  margin: 4px 0 8px;
+  padding: 6px 11px 6px 9px;
+  border-radius: 999px;
+  background: var(--warn-bg);
+}
+.warn-chip .warn-ico {
+  margin-top: 0;
 }
 .warn-ico {
   width: 15px;
@@ -574,21 +634,35 @@ h4 {
   gap: 8px;
 }
 .fc-slot {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 7px;
+  align-items: center;
   min-width: 0;
-  font-size: 13px;
-  line-height: 18px;
+  font-size: 13.5px;
+  line-height: 17px;
+}
+.fc-ico {
+  grid-row: span 2;
+  width: 22px;
+  height: 22px;
+  color: var(--text);
 }
 .fc-top b {
   font-weight: 600;
 }
 .fc-t {
-  margin-left: 6px;
+  margin-left: 5px;
   color: var(--text-muted);
+  font-weight: 500;
 }
 .fc-desc {
-  color: var(--text);
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 /* skala warna radar di panel: tiga kelas MSS */
 .rain-scale {
@@ -838,12 +912,15 @@ input[type="range"].rng:disabled {
 }
 
 /* ===== Detail: lembar tingkat kedua, bergulir sendiri ===== */
+.panel:not([data-detail="true"]) .panel-detail {
+  display: none;
+}
 .panel-detail {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  margin: 12px -16px 0;
-  padding: 12px 16px 2px;
+  margin: 12px calc(-1 * var(--pad)) 0;
+  padding: 12px var(--pad) 2px;
   border-top: 1px solid var(--panel-border);
   max-height: 36dvh;
   overflow-y: auto;
@@ -855,10 +932,190 @@ input[type="range"].rng:disabled {
   gap: 8px;
 }
 .d-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+.d-title small {
   font-size: 13px;
-  line-height: 18px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-align: right;
+}
+/* hujan per kecamatan: yang hujan berlatar & di atas */
+.kec-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 8px;
+}
+.kec-grid li {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 12px;
+  border-radius: var(--r-ctl);
+}
+.kec-grid li[data-rain] {
+  background: var(--seg-track);
+}
+.kec-n {
+  font-size: 14px;
+  line-height: 19px;
+  font-weight: 500;
+  color: var(--text-2);
+}
+.kec-grid li[data-rain] .kec-n {
+  font-weight: 700;
+  color: var(--text);
+}
+.kec-s {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  line-height: 17px;
+  color: var(--text-muted);
+}
+.kec-grid li[data-rain] .kec-s {
+  color: var(--text);
+  font-weight: 500;
+}
+.kec-s .answer-dot {
+  width: 8px;
+  height: 8px;
+}
+/* petak prakiraan BMKG — hanya di sidebar laptop (HP memakai strip ringkas di panel) */
+.fc-tiles {
+  display: none;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+.fc-tiles li {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 12px 10px 12px 12px;
+  border-radius: var(--r-ctl);
+  background: var(--seg-track);
+}
+.fct-time {
+  font-size: 12.5px;
+  line-height: 16px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.fct-ico {
+  width: 28px;
+  height: 28px;
+  color: var(--text);
+}
+.fct-deg {
+  font-size: 22px;
+  line-height: 26px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.fct-desc {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-muted);
+}
+/* pembanding Singapura: kisi 2 kolom dengan ikon */
+.nea {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 18px;
+  margin: 0;
+}
+.nea > div {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.nea-ico {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  margin-top: 1px;
+  color: var(--text-muted);
+}
+.nea dt {
+  font-size: 12.5px;
+  line-height: 17px;
+  color: var(--text-muted);
+}
+.nea dd {
+  margin: 1px 0 0;
+  font-size: 15px;
+  line-height: 20px;
   font-weight: 600;
   color: var(--text);
+}
+.nea dd small {
+  display: block;
+  font-size: 12.5px;
+  line-height: 17px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+/* kepala sidebar (laptop) */
+.sb-head {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 22px 0 18px;
+}
+.sb-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  font-family: var(--font-fraunces), "Fraunces", Georgia, serif;
+  font-weight: 500;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--wordmark);
+  white-space: nowrap;
+}
+.sb-brand i {
+  font-style: italic;
+}
+.sb-drop {
+  width: 15px;
+  height: 19px;
+  color: var(--accent);
+}
+.sb-icons {
+  display: flex;
+  gap: 8px;
+}
+.sb-ib {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: var(--seg-track);
+  color: var(--text);
+  cursor: pointer;
+}
+.sb-ib svg {
+  width: 18px;
+  height: 18px;
 }
 .d-text {
   display: flex;
@@ -886,24 +1143,6 @@ input[type="range"].rng:disabled {
   display: flex;
   flex-direction: column;
   gap: 4px;
-}
-/* tabel hujan per kecamatan: kolom nama cukup untuk "Belakang Padang" */
-.kv-kec > div {
-  grid-template-columns: 124px minmax(0, 1fr);
-}
-.kv-kec dd {
-  color: var(--text-muted);
-}
-.kv-kec dd[data-rain] {
-  color: var(--text);
-  font-weight: 600;
-}
-.kv-kec .answer-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  margin-right: 6px;
-  vertical-align: 0;
 }
 .kv > div {
   display: grid;
@@ -1010,8 +1249,8 @@ input[type="range"].rng:disabled {
   gap: 8px;
   overflow-x: auto;
   scrollbar-width: none;
-  margin: 4px -16px 0;
-  padding: 2px 16px;
+  margin: 4px calc(-1 * var(--pad)) 0;
+  padding: 2px var(--pad);
 }
 .chip-row::-webkit-scrollbar {
   display: none;
@@ -1089,7 +1328,7 @@ input[type="range"].rng:disabled {
 }
 .cam-rows {
   list-style: none;
-  margin: 0 -16px;
+  margin: 0 calc(-1 * var(--pad));
   padding: 0;
 }
 /* total panel saat daftar terbuka ≤ 60dvh: pegangan + judul + tautan + footer ≈ 176 px */
@@ -1105,7 +1344,7 @@ input[type="range"].rng:disabled {
   gap: 12px;
   width: 100%;
   min-height: 52px;
-  padding: 6px 16px;
+  padding: 6px var(--pad);
   border: 0;
   border-top: 1px solid var(--panel-border);
   background: transparent;
@@ -1145,8 +1384,8 @@ input[type="range"].rng:disabled {
   display: flex;
   align-items: center;
   min-height: 44px;
-  margin: 0 -16px;
-  padding: 0 16px;
+  margin: 0 calc(-1 * var(--pad));
+  padding: 0 var(--pad);
   border-top: 1px solid var(--panel-border);
   font-size: 13px;
   line-height: 18px;
@@ -1581,7 +1820,7 @@ input[type="range"].rng:disabled {
   -webkit-backdrop-filter: blur(5px);
   backdrop-filter: blur(5px);
   color: var(--text-muted) !important;
-  font-family: var(--font-inter), "Inter", system-ui, sans-serif !important;
+  font-family: var(--font-ui), "Plus Jakarta Sans", system-ui, sans-serif !important;
   font-size: 10px !important;
   line-height: 1.4 !important;
   padding: 2px 7px !important;
@@ -1644,20 +1883,125 @@ input[type="range"].rng:disabled {
   }
 }
 
-/* Laptop/desktop: panel mengambang di kiri bawah, lebar 380, isi sama dengan HP. */
+/* Laptop/desktop: SIDEBAR kiri setinggi layar, semua informasi tampil (tanpa Detail).
+   Urutan tampil diatur `order`: kepala → mode → jawaban … wilayah → isi Detail. */
 @media (min-width: 900px) {
+  .topbar,
+  .scrim-top {
+    display: none;
+  }
   .panel {
-    left: calc(20px + env(safe-area-inset-left, 0px));
-    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    --pad: 28px;
+    left: 0;
+    top: 0;
+    bottom: 0;
     transform: none;
-    width: 380px;
+    width: 408px;
+    max-height: none;
+    border: 0;
+    border-right: 1px solid var(--panel-border);
+    border-radius: 0;
+    background: var(--panel-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: 8px 0 32px rgba(10, 14, 24, 0.08);
+    padding: 0 var(--pad) 28px;
+    animation: fadein 0.4s ease both;
   }
-  .panel {
-    /* laptop berlayar pendek: panel tak menabrak topbar */
-    max-height: calc(100dvh - 92px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+  .panel-handle {
+    display: none;
   }
-  .panel-detail {
-    max-height: min(36dvh, 320px);
+  .panel-body > * {
+    order: 2;
+  }
+  .sb-head {
+    display: flex;
+    order: 0;
+  }
+  .panel-foot {
+    order: 1;
+    margin-top: 0;
+  }
+  .panel-foot .detail-toggle {
+    display: none;
+  }
+  .panel-foot .mode-switch {
+    flex: 1;
+  }
+  .panel-foot .mode-btn {
+    flex: 1;
+    width: auto;
+  }
+  .answer-block {
+    margin-top: 26px;
+  }
+  .warn-row.warn-chip {
+    margin: 26px 0 0;
+  }
+  .warn-chip + .answer-block {
+    margin-top: 16px;
+  }
+  .eyebrow {
+    display: flex;
+  }
+  .answer {
+    margin-top: 10px;
+    font-size: 38px;
+    line-height: 44px;
+    letter-spacing: -0.03em;
+  }
+  .answer-dot {
+    width: 12px;
+    height: 12px;
+  }
+  .context {
+    margin-top: 6px;
+    font-size: 17px;
+    line-height: 24px;
+  }
+  .rain-scale,
+  .ofs-scale {
+    margin-top: 16px;
+  }
+  .fc {
+    display: none;
+  }
+  .fc-tiles {
+    display: grid;
+  }
+  .transport {
+    margin-top: 22px;
+  }
+  .view-row {
+    margin-top: 16px;
+  }
+  .panel[data-detail] .panel-detail {
+    order: 3;
+    display: flex;
+    gap: 0;
+    max-height: none;
+    overflow: visible;
+    margin: 24px calc(-1 * var(--pad)) 0;
+    padding: 0;
+    border-top: 0;
+  }
+  .panel-detail .d-sec {
+    gap: 14px;
+    padding: 22px var(--pad);
+    border-top: 1px solid var(--panel-border);
+  }
+  .cam-block {
+    margin-top: 20px;
+  }
+  .cam-list {
+    margin-top: 20px;
+  }
+  .cam-list .cam-rows {
+    max-height: none;
+  }
+  .chip-row {
+    flex-wrap: wrap;
+    overflow: visible;
   }
 }
 
@@ -1665,10 +2009,13 @@ input[type="range"].rng:disabled {
 @media (max-height: 480px) and (orientation: landscape) {
   .panel {
     left: auto;
+    top: auto;
     right: calc(12px + env(safe-area-inset-right, 0px));
     bottom: calc(10px + env(safe-area-inset-bottom, 0px));
     transform: none;
     width: 340px;
+    border: 1px solid var(--panel-border);
+    border-radius: var(--r-sheet);
     max-height: calc(100dvh - 74px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
     overflow-y: auto;
     animation: none;

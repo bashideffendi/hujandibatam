@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, type ReactNode, type RefObject } from "react";
 import type { EchoLevel } from "@/lib/status";
+import { useMedia } from "@/hooks/useBrowser";
 import { IconChevronUp } from "./icons";
 
 type Props = {
@@ -20,11 +21,14 @@ type Props = {
   miniDot: EchoLevel | null;
   /** teks untuk pembaca layar (aria-live) — berubah hanya saat keadaan terbaru berubah */
   liveText: string;
+  /** kepala sidebar (wordmark + tombol) — hanya tampil di layar lebar, lihat globals.css */
+  head?: ReactNode;
   children: ReactNode;
 };
 
-// Kerangka panel bawah (bottom-sheet): pegangan 36×4 (area sentuh 44) ↔ bilah mini 56 px,
-// plus isi panel. Pegangan & bilah mini saling menggantikan di DOM, jadi fokus dipindahkan
+// Kerangka panel. HP: bottom-sheet dengan pegangan 36×4 (area sentuh 44) ↔ bilah mini 56 px.
+// Layar lebar (≥900 px): sidebar kiri setinggi layar yang selalu terbuka — status "diciutkan"
+// diabaikan di sana. Pegangan & bilah mini saling menggantikan di DOM, jadi fokus dipindahkan
 // ke penggantinya supaya pengguna keyboard tidak "jatuh" ke body.
 export default function Panel({
   label,
@@ -38,8 +42,11 @@ export default function Panel({
   miniMain,
   miniDot,
   liveText,
+  head,
   children,
 }: Props) {
+  const wide = useMedia("(min-width: 900px)");
+  const folded = collapsed && !wide;
   const handleRef = useRef<HTMLButtonElement>(null);
   const miniRef = useRef<HTMLButtonElement>(null);
   const touched = useRef(false);
@@ -49,8 +56,8 @@ export default function Panel({
   useEffect(() => {
     if (!touched.current) return;
     touched.current = false;
-    (collapsed ? miniRef.current : handleRef.current)?.focus();
-  }, [collapsed]);
+    (folded ? miniRef.current : handleRef.current)?.focus();
+  }, [folded]);
 
   const toggle = (v: boolean) => {
     touched.current = true;
@@ -62,13 +69,13 @@ export default function Panel({
       className="panel"
       aria-label={label}
       ref={panelRef}
-      data-collapsed={collapsed}
+      data-collapsed={folded}
       data-detail={detail}
       data-listing={listing}
       data-mode={mode}
       inert={inert}
     >
-      {collapsed ? (
+      {folded ? (
         <button
           ref={miniRef}
           className="panel-mini"
@@ -94,6 +101,7 @@ export default function Panel({
             <i className="handle-bar" aria-hidden />
           </button>
           <div id="panel-body" className="panel-body">
+            {head}
             {children}
           </div>
         </>

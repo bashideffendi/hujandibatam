@@ -81,6 +81,87 @@ export const IconWarn = ({ className }: P) => (
     <path d="M12 9v4M12 17h.01" />
   </svg>
 );
+// ---- ikon cuaca (garis tipis) untuk prakiraan BMKG & pembanding NEA ----
+const CLOUD_D = "M7.5 18.5h9.8a4 4 0 0 0 .5-7.97 5.6 5.6 0 0 0-10.8 1.5A3.25 3.25 0 0 0 7.5 18.5Z";
+const CLOUD_HI_D = "M7.5 15h9.8a4 4 0 0 0 .5-7.97 5.6 5.6 0 0 0-10.8 1.5A3.25 3.25 0 0 0 7.5 15Z";
+const SUN_RAYS = "M12 2.5v2M12 19.5v2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M2.5 12h2M19.5 12h2M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4";
+export const IconCloud = ({ className }: P) => (
+  <svg className={className} {...line} strokeWidth={1.6}>
+    <path d={CLOUD_D} />
+  </svg>
+);
+export const IconWindLines = ({ className }: P) => (
+  <svg className={className} {...line} strokeWidth={1.6}>
+    <path d="M3 8.5h10.5a2.5 2.5 0 1 0-2.5-2.5M3 12.5h15.5a2.5 2.5 0 1 1-2.5 2.5M3 16.5h8" />
+  </svg>
+);
+export const IconGauge = ({ className }: P) => (
+  <svg className={className} {...line} strokeWidth={1.6}>
+    <path d="M4.5 16a8 8 0 1 1 15 0" />
+    <path d="M12 12.5 15.5 9" />
+    <circle cx="12" cy="13" r="1.3" />
+  </svg>
+);
+export const IconSunLine = ({ className }: P) => (
+  <svg className={className} {...line} strokeWidth={1.6}>
+    <circle cx="12" cy="12" r="4" />
+    <path d={SUN_RAYS} />
+  </svg>
+);
+
+type Sky = "sun" | "suncloud" | "cloud" | "haze" | "rain" | "storm";
+/** Deskripsi BMKG/NEA ("Cerah Berawan", "Udara Kabur", "Hujan Ringan", …) → jenis ikon. */
+export function skyOf(desc: string): Sky {
+  const d = desc.toLowerCase();
+  if (d.includes("petir")) return "storm";
+  if (d.includes("hujan")) return "rain";
+  if (d.includes("kabur") || d.includes("asap") || d.includes("kabut")) return "haze";
+  if (d.includes("cerah berawan")) return "suncloud";
+  if (d.includes("berawan")) return "cloud";
+  return "sun";
+}
+/** Ikon cuaca dari deskripsi teks; dekoratif (teksnya selalu ikut tampil). */
+export const WeatherIcon = ({ desc, className }: P & { desc: string }) => {
+  const sky = skyOf(desc);
+  return (
+    <svg className={className} {...line} strokeWidth={1.6}>
+      {sky === "sun" && (
+        <>
+          <circle cx="12" cy="12" r="4" />
+          <path d={SUN_RAYS} />
+        </>
+      )}
+      {sky === "suncloud" && (
+        <>
+          <path d="M8.5 3.5v1.3M3.8 5.6l.9.9M2 10h1.3M13.2 5.6l-.9.9" />
+          <path d="M5.3 11.5a3.4 3.4 0 0 1 6.2-2.6" />
+          <path d="M9.3 20h8.2a3.6 3.6 0 0 0 .5-7.15 5 5 0 0 0-9.6 1.2A3 3 0 0 0 9.3 20Z" />
+        </>
+      )}
+      {sky === "cloud" && <path d={CLOUD_D} />}
+      {sky === "haze" && (
+        <>
+          <path d="M12 3v1.6M5.9 5.5l1.1 1.1M18.1 5.5 17 6.6" />
+          <path d="M7.4 10.5a4.6 4.6 0 0 1 9.2 0" />
+          <path d="M3.5 14h17M5.5 17.5h13M8 21h8" />
+        </>
+      )}
+      {sky === "rain" && (
+        <>
+          <path d={CLOUD_HI_D} />
+          <path d="M9 18.2l-1 2.3M13 18.2l-1 2.3M17 18.2l-1 2.3" />
+        </>
+      )}
+      {sky === "storm" && (
+        <>
+          <path d={CLOUD_HI_D} />
+          <path d="M12.5 15.5 10.5 19h3l-2 3.5" />
+        </>
+      )}
+    </svg>
+  );
+};
+
 export const IconPlay = () => (
   <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
     <path d="M8 5v14l11-7z" />
