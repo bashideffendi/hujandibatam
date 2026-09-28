@@ -1,8 +1,8 @@
 "use client";
 
-import { Marker, Tooltip, useMap, useMapEvents } from "react-leaflet";
+import { Marker, Popup, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { MAPPED_CAMS, type Cam } from "@/lib/cctv";
 import { reduceMotion } from "@/lib/client";
 import { CCTV_MAX_ZOOM } from "@/lib/radar";
@@ -10,7 +10,7 @@ import { CAM_PATH_A, CAM_PATH_B } from "./icons";
 import type { Padding } from "./MapController";
 
 // Pin kamera di peta. Ikon dibikin per kamera (divIcon) — murah, nggak narik apa-apa
-// dari jaringan. Stream baru jalan pas pin diklik (lihat CctvPlayer).
+// dari jaringan. Stream baru jalan pas kamera dipilih (lihat CctvPlayer).
 //
 // Varian visual: biasa · perkiraan (ring putus-putus; koordinatnya bisa meleset ratusan
 // meter) · mati (abu; status diketahui dari sesi ini, bukan hardcode) · KELOMPOK
@@ -23,10 +23,18 @@ const PIN_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
 // satu simpang.
 const FAN_RADIUS = 0.0004;
 
-// Pin yang jaraknya di layar < 40 px digabung jadi satu kelompok berangka. Di zoom awal
-// (kota) 10 kamera Batam Kota cuma berjarak ~20 px — tanpa ini jadi gumpalan yang tak
-// bisa dipilih. Di zoom maksimum tidak pernah digabung, supaya tiap kamera pasti terjangkau.
-const CLUSTER_PX = 40;
+// Pin yang jaraknya di layar < 30 px (visual pin 24 px + halo) digabung jadi kelompok.
+// Jangkar kelompok TETAP (bukan centroid yang bergeser) dan dipilih dari titik terpadat
+// dulu — cara lama (centroid bergeser, 40 px) merantai kamera sejauh beberapa km jadi
+// satu gumpalan 21. Kelompok TIDAK dipecah dengan zoom: 7 kelompok memang berdempetan
+// di dunia nyata (mis. 5 kamera sekitar alun-alun Engku Putri, <400 m; beberapa pasang
+// satu simpang) dan baru terpisah di zoom 16–17. Jadi ketuk kelompok = DAFTAR kamera,
+// langsung pilih — tanpa harus zoom.
+const CLUSTER_PX = 30;
+// Kelompok sampai 6 kamera → daftar pilihan. Lebih dari itu (cuma terjadi di zoom kota,
+// mis. 21 kamera Batam Kota–Nagoya–Sekupang) → ketuk memperbesar peta, lalu kelompok
+// kecilnya bisa dipilih dari daftar. Paling banyak dua ketukan sampai ke kamera.
+const LIST_MAX = 6;
 
 type Placed = { cam: Cam; pos: [number, number] };
 type Group = { key: string; members: Placed[]; center: [number, number] };
@@ -62,32 +70,35 @@ function clusterize(placed: Placed[], map: L.Map, zoom: number): Group[] {
   if (zoom >= CCTV_MAX_ZOOM) {
     return placed.map((p) => ({ key: p.cam.slug, members: [p], center: p.pos }));
   }
-  const pts = placed.map((p) => ({ p, px: map.project(p.pos, zoom) }));
-  const used = new Array<boolean>(pts.length).fill(false);
+  const px = placed.map((p) => map.project(p.pos, zoom));
+  const r2 = CLUSTER_PX * CLUSTER_PX;
+  const near = (i: number, j: number) => {
+    const dx = px[i].x - px[j].x;
+    const dy = px[i].y - px[j].y;
+    return dx * dx + dy * dy <= r2;
+  };
+  // jangkar = titik dengan tetangga terbanyak dulu → kelompok berpusat di titik terpadat
+  const order = placed
+    .map((_, i) => ({ i, n: placed.reduce((s, _p, j) => s + (near(i, j) ? 1 : 0), 0) }))
+    .sort((a, b) => b.n - a.n)
+    .map((o) => o.i);
+  const used = new Array<boolean>(placed.length).fill(false);
   const out: Group[] = [];
-  for (let i = 0; i < pts.length; i++) {
+  for (const i of order) {
     if (used[i]) continue;
-    used[i] = true;
-    const members = [pts[i]];
-    let cx = pts[i].px.x;
-    let cy = pts[i].px.y;
-    for (let j = i + 1; j < pts.length; j++) {
-      if (used[j]) continue;
-      const dx = pts[j].px.x - cx;
-      const dy = pts[j].px.y - cy;
-      if (dx * dx + dy * dy > CLUSTER_PX * CLUSTER_PX) continue;
-      used[j] = true;
-      members.push(pts[j]);
-      cx = members.reduce((s, m) => s + m.px.x, 0) / members.length;
-      cy = members.reduce((s, m) => s + m.px.y, 0) / members.length;
-    }
+    const idx = placed.map((_, j) => j).filter((j) => !used[j] && near(i, j));
+    for (const j of idx) used[j] = true;
+    const members = idx.map((j) => placed[j]).sort((a, b) => a.cam.name.localeCompare(b.cam.name, "id"));
     out.push({
-      key: members.map((m) => m.p.cam.slug).join("+"),
-      members: members.map((m) => m.p),
-      center: [
-        members.reduce((s, m) => s + m.p.pos[0], 0) / members.length,
-        members.reduce((s, m) => s + m.p.pos[1], 0) / members.length,
-      ],
+      key: members.map((m) => m.cam.slug).join("+"),
+      members,
+      center:
+        members.length === 1
+          ? members[0].pos
+          : [
+              members.reduce((s, m) => s + m.pos[0], 0) / members.length,
+              members.reduce((s, m) => s + m.pos[1], 0) / members.length,
+            ],
     });
   }
   return out;
@@ -108,19 +119,66 @@ function camIcon(cam: Cam, isDead: boolean) {
 }
 
 function clusterIcon(n: number, allDead: boolean) {
+  const hint = n > LIST_MAX ? "ketuk untuk memperbesar" : "ketuk untuk memilih";
   return L.divIcon({
     className: "cam-hit",
-    html: `<span class="cam-cluster${allDead ? " is-mati" : ""}" role="img" aria-label="${n} kamera berdekatan — ketuk untuk memperbesar">${n}</span>`,
+    html: `<span class="cam-cluster${allDead ? " is-mati" : ""}" role="img" aria-label="${n} kamera berdekatan — ${hint}">${n}</span>`,
     iconSize: [44, 44],
     iconAnchor: [22, 22],
   });
+}
+
+/**
+ * Isi popup daftar. react-leaflet baru merender isi popup SESUDAH Leaflet membukanya, jadi
+ * Leaflet menghitung posisi & auto-pan dengan isi kosong — daftar sempat keluar layar ke
+ * atas. Komponen ini mount tepat saat isinya sudah ada di DOM, lalu meminta popup
+ * menghitung ulang (update() = ukur ulang + geser peta supaya utuh terlihat) dan
+ * memfokuskan pilihan pertama untuk pengguna keyboard.
+ */
+function FitOnMount({ popupRef, children }: { popupRef: { current: L.Popup | null }; children: ReactNode }) {
+  const el = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    popupRef.current?.update();
+    el.current?.querySelector<HTMLButtonElement>(".cam-list-item")?.focus({ preventScroll: true });
+  }, [popupRef]);
+  return <div ref={el}>{children}</div>;
+}
+
+function ClusterPopup({
+  count,
+  pad,
+  children,
+}: {
+  count: number;
+  pad: Padding;
+  children: ReactNode;
+}) {
+  const ref = useRef<L.Popup | null>(null);
+  return (
+    <Popup
+      ref={ref}
+      className="cam-list-popup"
+      closeButton={false}
+      minWidth={232}
+      maxWidth={288}
+      offset={[0, -14]}
+      autoPanPaddingTopLeft={[pad.paddingTopLeft[0], pad.paddingTopLeft[1] + 8]}
+      autoPanPaddingBottomRight={pad.paddingBottomRight}
+    >
+      <FitOnMount popupRef={ref}>
+        <div className="cam-list" role="group" aria-label={`${count} kamera di titik ini`}>
+          {children}
+        </div>
+      </FitOnMount>
+    </Popup>
+  );
 }
 
 type Props = {
   onPick: (cam: Cam) => void;
   /** slug → lastSeen (ms) kamera yang terbukti mati/beku di sesi ini. */
   dead: ReadonlyMap<string, number | null>;
-  /** ruang yang tertutup panel/topbar — supaya kelompok yang diperbesar tidak tersembunyi. */
+  /** ruang yang tertutup panel/topbar — supaya daftar & kelompok tidak tersembunyi. */
   getPadding: () => Padding;
 };
 
@@ -134,12 +192,21 @@ export default function CctvLayer({ onPick, dead, getPadding }: Props) {
 
   const zoomTo = useCallback(
     (g: Group) => {
+      map.closePopup();
       const b = L.latLngBounds(g.members.map((m) => L.latLng(m.pos[0], m.pos[1])));
       const opts = { ...getPadding(), maxZoom: CCTV_MAX_ZOOM };
       if (reduceMotion()) map.fitBounds(b, { ...opts, animate: false });
       else map.flyToBounds(b, { ...opts, duration: 0.6 });
     },
     [map, getPadding],
+  );
+
+  const choose = useCallback(
+    (cam: Cam) => {
+      map.closePopup();
+      onPick(cam);
+    },
+    [map, onPick],
   );
 
   // Ikon dibuat ulang HANYA saat susunan kelompok atau status mati berubah — bukan tiap
@@ -149,14 +216,7 @@ export default function CctvLayer({ onPick, dead, getPadding }: Props) {
       groups.map((g) => {
         if (g.members.length > 1) {
           const allDead = g.members.every((m) => dead.has(m.cam.slug));
-          return {
-            key: g.key,
-            position: g.center,
-            icon: clusterIcon(g.members.length, allDead),
-            label: `${g.members.length} kamera`,
-            group: g,
-            cam: null as Cam | null,
-          };
+          return { key: g.key, position: g.center, icon: clusterIcon(g.members.length, allDead), group: g, cam: null };
         }
         const { cam, pos } = g.members[0];
         const isDead = dead.has(cam.slug);
@@ -164,29 +224,65 @@ export default function CctvLayer({ onPick, dead, getPadding }: Props) {
           key: cam.slug,
           position: pos,
           icon: camIcon(cam, isDead),
-          label: `${cam.name}${cam.approx ? " · perkiraan" : ""}${isDead ? " · mati" : ""}`,
           group: g,
-          cam,
+          cam: cam as Cam | null,
+          label: `${cam.name}${cam.approx ? " · perkiraan" : ""}${isDead ? " · mati" : ""}`,
         };
       }),
     [groups, dead],
   );
 
+  const pad = getPadding();
+
   return (
     <>
-      {items.map((it) => (
-        <Marker
-          key={it.key}
-          position={it.position}
-          icon={it.icon}
-          eventHandlers={{ click: () => (it.cam ? onPick(it.cam) : zoomTo(it.group)) }}
-          keyboard
-        >
-          <Tooltip direction="top" offset={[0, -18]} className="cam-label">
-            {it.label}
-          </Tooltip>
-        </Marker>
-      ))}
+      {items.map((it) =>
+        !it.cam && it.group.members.length > LIST_MAX ? (
+          <Marker
+            key={it.key}
+            position={it.position}
+            icon={it.icon}
+            eventHandlers={{ click: () => zoomTo(it.group) }}
+            keyboard
+          />
+        ) : it.cam ? (
+          <Marker
+            key={it.key}
+            position={it.position}
+            icon={it.icon}
+            eventHandlers={{ click: () => onPick(it.cam as Cam) }}
+            keyboard
+          >
+            <Tooltip direction="top" offset={[0, -18]} className="cam-label">
+              {"label" in it ? it.label : ""}
+            </Tooltip>
+          </Marker>
+        ) : (
+          <Marker key={it.key} position={it.position} icon={it.icon} keyboard>
+            <ClusterPopup count={it.group.members.length} pad={pad}>
+              <div className="cam-list-head">{it.group.members.length} kamera di sini</div>
+              <ul>
+                {it.group.members.map(({ cam }) => {
+                  const isDead = dead.has(cam.slug);
+                  return (
+                    <li key={cam.slug}>
+                      <button className={`cam-list-item${isDead ? " is-mati" : ""}`} onClick={() => choose(cam)}>
+                        <span className="nm">{cam.name}</span>
+                        <span className="meta">
+                          {isDead ? "lagi mati" : cam.approx ? "posisi perkiraan" : cam.area}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              <button className="cam-list-zoom" onClick={() => zoomTo(it.group)}>
+                Perbesar peta ke sini
+              </button>
+            </ClusterPopup>
+          </Marker>
+        ),
+      )}
     </>
   );
 }

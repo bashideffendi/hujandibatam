@@ -28,8 +28,7 @@ export default function CctvBlock({ recent, dead, onPick }: Props) {
         </div>
       )}
       <div className="cam-hint">
-        Ketuk pin kamera buat lihat siarannya. Lingkaran berangka = beberapa kamera berdekatan,
-        ketuk buat memperbesar. Pin bergaris putus = posisi perkiraan, pin abu = lagi mati.
+        Ketuk pin untuk menonton. Angka = beberapa kamera berdekatan, ketuk untuk memilih.
       </div>
       {UNMAPPED_CAMS.length > 0 && (
         <div className="cam-extra">
