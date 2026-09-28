@@ -20,6 +20,13 @@ const SECURITY_HEADERS = [
 ];
 
 const nextConfig: NextConfig = {
+  // Cache build Turbopack (bawaan Next 16.3) DIMATIKAN: Vercel memulihkannya dari deploy
+  // sebelumnya, dan deploy 006ab42 (29 Sep 2026) keluar dengan CSS basi — JS baru, tapi
+  // chunk CSS bernama sama dengan deploy lama (aturan globals.css baru hilang di produksi).
+  // Build bersih ±beberapa detik lebih lama; hasilnya selalu sesuai kode.
+  experimental: {
+    turbopackFileSystemCacheForBuild: false,
+  },
   async headers() {
     return [
       { source: "/(.*)", headers: SECURITY_HEADERS },
