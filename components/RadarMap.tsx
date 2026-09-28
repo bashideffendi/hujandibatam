@@ -60,7 +60,7 @@ import CamDirectory from "./panel/CamDirectory";
 import CamList from "./panel/CamList";
 import CctvBlock from "./panel/CctvBlock";
 import Conditions from "./panel/Conditions";
-import { Footer, Transport, ViewSelector } from "./panel/Controls";
+import { ControlStack, Footer, Transport, ViewSelector } from "./panel/Controls";
 import Credit from "./panel/Credit";
 import { ForecastSection, KecTable, PerairanInfo } from "./panel/DetailSections";
 import ForecastStrip from "./panel/ForecastStrip";
@@ -356,12 +356,9 @@ export default function RadarMap() {
   const tiles = forecastStrip(forecast.data, forecast.error, now, 4);
   const rainyKecs = rainyMap(radar.echo);
   const showKec = rv.isLatest && !rv.currentBroken && radar.status === "ok";
-  // baris kecil di atas jawaban (hanya tampil di sidebar laptop)
-  const rainEyebrow = rv.latest
-    ? rv.fresh
-      ? `Radar MSS · Terbaru ${rv.latest.time} WIB`
-      : `Radar MSS · ${rv.latestWhen}`
-    : "Radar MSS";
+  // baris kecil di atas jawaban (hanya tampil di sidebar laptop): SUMBER data. Jam citra
+  // sudah ada di penggeser ("Terbaru 15.20 WIB"), jadi di sini hanya disebut kalau tidak segar.
+  const rainEyebrow = rv.latest && !rv.fresh ? `Radar MSS Singapura · ${rv.latestWhen}` : "Radar MSS Singapura";
   const ov = ofsView({
     ofs: ofs.ofs,
     idx: ofs.idx,
@@ -371,7 +368,8 @@ export default function RadarMap() {
     offline,
   });
   const ombak = ofsAnswer(ofs.perairan, ofs.perairanError, ov, offline);
-  const ombakEyebrow = `Model Gelombang BMKG${ov.wib ? ` · Peta ${ov.wib.time} WIB` : ""}`;
+  // jam peta sudah ada di penggeser ("Peta BMKG 15.00 WIB, Sekarang")
+  const ombakEyebrow = "Model Gelombang BMKG";
   const ombakCap = ofsCaption(ov);
   const cctv = cctvAnswer(MAPPED_CAMS.length, deadCams.size);
 
@@ -521,22 +519,24 @@ export default function RadarMap() {
               live={rv.fresh}
               onRetry={rain.retry && !offline ? radar.load : undefined}
             />
-            <RainScale />
             {forecast.data && <ForecastStrip place={forecast.data.place} strip={strip} />}
-            <Transport
-              playing={playing}
-              ready={rv.ready}
-              onTogglePlay={togglePlay}
-              playLabel={firstTime ? `Putar Radar sejak ${firstTime} WIB` : "Putar Radar"}
-              label="Waktu Peta Radar"
-              valueText={rv.sliderText}
-              max={Math.max(0, radar.frames.length - 1)}
-              value={radar.idx}
-              onScrub={scrub}
-              caption={rainCap}
-              onToNow={toNow}
-            />
-            <ViewSelector keys={VIEW_KEYS.hujan} view={view} onChange={setView} />
+            <ControlStack>
+              <RainScale />
+              <Transport
+                playing={playing}
+                ready={rv.ready}
+                onTogglePlay={togglePlay}
+                playLabel={firstTime ? `Putar Radar sejak ${firstTime} WIB` : "Putar Radar"}
+                label="Waktu Peta Radar"
+                valueText={rv.sliderText}
+                max={Math.max(0, radar.frames.length - 1)}
+                value={radar.idx}
+                onScrub={scrub}
+                caption={rainCap}
+                onToNow={toNow}
+              />
+              <ViewSelector keys={VIEW_KEYS.hujan} view={view} onChange={setView} />
+            </ControlStack>
           </>
         )}
 
@@ -550,23 +550,25 @@ export default function RadarMap() {
               onRetry={ombak.retry ? () => ofs.load(true) : undefined}
             />
             {ov.problem && <WarnRow text={ov.problem} />}
-            <OfsScale />
-            <Transport
-              playing={playing}
-              ready={ov.ready}
-              onTogglePlay={togglePlay}
-              playLabel={
-                ov.lastWib ? `Putar Prakiraan Ombak sampai ${ov.lastWib.day} ${ov.lastWib.time}` : "Putar Prakiraan Ombak"
-              }
-              label="Waktu Prakiraan Ombak"
-              valueText={ov.sliderText}
-              max={Math.max(0, ov.count - 1)}
-              value={ofs.idx}
-              onScrub={scrub}
-              caption={ombakCap}
-              onToNow={toNow}
-            />
-            <ViewSelector keys={VIEW_KEYS.ombak} view={view} onChange={setView} />
+            <ControlStack>
+              <OfsScale />
+              <Transport
+                playing={playing}
+                ready={ov.ready}
+                onTogglePlay={togglePlay}
+                playLabel={
+                  ov.lastWib ? `Putar Prakiraan Ombak sampai ${ov.lastWib.day} ${ov.lastWib.time}` : "Putar Prakiraan Ombak"
+                }
+                label="Waktu Prakiraan Ombak"
+                valueText={ov.sliderText}
+                max={Math.max(0, ov.count - 1)}
+                value={ofs.idx}
+                onScrub={scrub}
+                caption={ombakCap}
+                onToNow={toNow}
+              />
+              <ViewSelector keys={VIEW_KEYS.ombak} view={view} onChange={setView} />
+            </ControlStack>
           </>
         )}
 

@@ -1,4 +1,4 @@
-import { useRef, type KeyboardEvent } from "react";
+import { useRef, type KeyboardEvent, type ReactNode } from "react";
 import { VIEWS, type Mode, type ViewKey } from "@/lib/radar";
 import type { Caption } from "@/lib/status";
 import { IconChevronDown, IconPause, IconPlay } from "../icons";
@@ -45,7 +45,16 @@ export function ModeSwitch({ mode, onChange }: { mode: Mode; onChange: (m: Mode)
   );
 }
 
-/** Pilihan wilayah peta — satu baris di panel (selalu terlihat), label di kiri. */
+/**
+ * Blok kontrol panel (Skala, Waktu, Wilayah): kisi dua kolom yang sama untuk tiap baris —
+ * label atau tombol Putar di kiri, batang/penggeser/pilihan di kanan — supaya semua
+ * kontrol berbagi satu tepi kiri dan kanan.
+ */
+export function ControlStack({ children }: { children: ReactNode }) {
+  return <div className="ctl-stack">{children}</div>;
+}
+
+/** Pilihan wilayah peta — satu baris di panel (selalu terlihat), label di kolom kiri. */
 export function ViewSelector({
   keys,
   view,
@@ -56,8 +65,8 @@ export function ViewSelector({
   onChange: (v: ViewKey) => void;
 }) {
   return (
-    <div className="view-row">
-      <span className="view-lab" id="view-lab">
+    <div className="ctl-row view-row">
+      <span className="ctl-lab" id="view-lab">
         Wilayah
       </span>
       <div
@@ -115,7 +124,7 @@ export function Transport({
 }: TransportProps) {
   const rangeRef = useRef<HTMLInputElement>(null);
   return (
-    <div className="transport">
+    <div className="ctl-row transport">
       <button className="play" onClick={onTogglePlay} disabled={!ready} aria-label={playing ? "Jeda" : playLabel}>
         {playing ? <IconPause /> : <IconPlay />}
       </button>

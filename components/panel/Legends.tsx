@@ -17,29 +17,42 @@ const RAIN_CLASSES = [
   { key: "lebat", label: "Lebat", colors: LEGEND.slice(6) },
 ] as const;
 
-/** Skala warna radar di panel (selalu terlihat). */
+/**
+ * Skala warna radar di panel (selalu terlihat): satu batang selebar kolom kontrol, dibagi
+ * tiga kelas, nama kelas di bawah awal tiap bagian.
+ */
 export function RainScale() {
   return (
-    <ul className="rain-scale" aria-label="Skala Warna Radar">
-      {RAIN_CLASSES.map((c) => (
-        <li key={c.key}>
-          <i style={{ background: `linear-gradient(to right, ${c.colors.join(", ")})` }} aria-hidden />
-          {c.label}
-        </li>
-      ))}
-    </ul>
+    <div className="ctl-row">
+      <span className="ctl-lab" aria-hidden>
+        Skala
+      </span>
+      <ul className="rain-scale" aria-label="Skala Warna Radar">
+        {RAIN_CLASSES.map((c) => (
+          <li key={c.key}>
+            <i style={{ background: `linear-gradient(to right, ${c.colors.join(", ")})` }} aria-hidden />
+            {c.label}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
 /** Skala tinggi ombak di panel (selalu terlihat): band warna BMKG + meter. */
 export function OfsScale() {
   return (
-    <div className="ofs-scale" role="img" aria-label="Skala Tinggi Ombak, 0 sampai 7 meter">
-      <div className="ofs-bar" style={{ background: OFS_GRADIENT }} />
-      <div className="ofs-ticks" aria-hidden>
-        {TICKS.map((m) => (
-          <span key={m}>{m === OFS_MAX_M ? `${m} m` : m}</span>
-        ))}
+    <div className="ctl-row">
+      <span className="ctl-lab" aria-hidden>
+        Skala
+      </span>
+      <div className="ofs-scale" role="img" aria-label="Skala Tinggi Ombak, 0 sampai 7 meter">
+        <div className="ofs-bar" style={{ background: OFS_GRADIENT }} />
+        <div className="ofs-ticks" aria-hidden>
+          {TICKS.map((m) => (
+            <span key={m}>{m === OFS_MAX_M ? `${m} m` : m}</span>
+          ))}
+        </div>
       </div>
     </div>
   );

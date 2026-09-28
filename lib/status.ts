@@ -543,7 +543,7 @@ export function ofsCaption(ov: OfsView): Caption {
   if (ov.phase === "now") {
     // data kedaluwarsa: frame "sekarang" hanyalah frame terakhir yang tersedia
     return ov.expired
-      ? { left: `Peta BMKG ${day} ${time}, Terakhir Tersedia`, right: null, warn: true, toNow: false }
+      ? { left: `Peta ${day} ${time}, Terakhir Tersedia`, right: null, warn: true, toNow: false } // muat di 360 px
       : { left: `Peta BMKG ${time} WIB, Sekarang`, right: null, warn: false, toNow: false };
   }
   // berbagi baris dengan "Ke Sekarang" → versi pendek
