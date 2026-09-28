@@ -21,7 +21,11 @@ export default function Credit() {
       <a href="https://maritim.bmkg.go.id" {...ext}>
         Gelombang
       </a>{" "}
-      BMKG, Kamera Pemko Batam, Peta ©{" "}
+      BMKG, Batas Kecamatan{" "}
+      <a href="https://satudata.batam.go.id/data/peta" {...ext}>
+        Satu Data Kota Batam
+      </a>
+      , Kamera Pemko Batam, Peta ©{" "}
       <a href="https://www.openstreetmap.org/copyright" {...ext}>
         OpenStreetMap
       </a>{" "}

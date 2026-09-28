@@ -45,6 +45,7 @@ export function ModeSwitch({ mode, onChange }: { mode: Mode; onChange: (m: Mode)
   );
 }
 
+/** Pilihan wilayah peta — satu baris di panel (selalu terlihat), label di kiri. */
 export function ViewSelector({
   keys,
   view,
@@ -55,14 +56,14 @@ export function ViewSelector({
   onChange: (v: ViewKey) => void;
 }) {
   return (
-    <section className="d-sec">
-      <h3 className="d-title" id="view-title">
-        Wilayah Peta
-      </h3>
+    <div className="view-row">
+      <span className="view-lab" id="view-lab">
+        Wilayah
+      </span>
       <div
         className="segmented"
         role="group"
-        aria-labelledby="view-title"
+        aria-labelledby="view-lab"
         style={{ gridTemplateColumns: `repeat(${keys.length}, 1fr)` }}
       >
         {keys.map((k) => (
@@ -77,7 +78,7 @@ export function ViewSelector({
           </button>
         ))}
       </div>
-    </section>
+    </div>
   );
 }
 

@@ -1,39 +1,36 @@
 import type { EchoSummary, ForecastResponse, PerairanResponse } from "@/lib/api-types";
-import { BATAM_BOX_KM } from "@/lib/radar";
-import { perairanDetail, rainDetail, type ForecastStripView } from "@/lib/status";
+import { KEC_RAIN_MIN_KM2 } from "@/lib/kecamatan";
+import { kecTable, perairanDetail, type ForecastStripView } from "@/lib/status";
 
 /**
- * Detail HUJAN: apa itu "sekitar Batam", seberapa luas hujannya, dan batas kejujuran radar.
- * Judul hanya "Sekarang" kalau citra terbaru segar; kalimat garis putus hanya saat garisnya tampil.
+ * Detail HUJAN: status tiap kecamatan dari citra radar terbaru + cara menghitungnya.
+ * Judul menyebut jamnya kalau citra terbaru tidak segar (terlambat/terputus/offline).
  */
-export function RadarNow({
-  echo,
-  when,
-  fresh,
-  boxShown,
-}: {
-  echo: EchoSummary | null;
-  /** waktu citra terbaru ("10.15 WIB" / "Sabtu 10.15") */
-  when: string;
-  fresh: boolean;
-  boxShown: boolean;
-}) {
-  const d = rainDetail(echo);
+export function KecTable({ echo, when, fresh }: { echo: EchoSummary | null; when: string; fresh: boolean }) {
+  const rows = kecTable(echo);
   return (
     <section className="d-sec">
-      <h3 className="d-title">{fresh || !when ? "Radar Sekarang" : `Radar Terakhir, ${when}`}</h3>
-      <div className="d-text">
-        <p>
-          {boxShown
-            ? `Sekitar Batam = kotak garis putus di peta, kira-kira ${BATAM_BOX_KM} × ${BATAM_BOX_KM} km.`
-            : `Sekitar Batam = kotak kira-kira ${BATAM_BOX_KM} × ${BATAM_BOX_KM} km di sekeliling Pulau Batam. Garisnya tampil saat peta menampilkan radar terbaru.`}
-        </p>
-        <p>{d.coverage}</p>
-        {d.strongest && <p>{d.strongest}</p>}
-        <p className="d-muted">
-          Ini perkiraan radar MSS dari pantulan butiran air, jadi bisa beda dengan yang kamu rasakan.
-        </p>
-      </div>
+      <h3 className="d-title">{fresh || !when ? "Hujan per Kecamatan" : `Hujan per Kecamatan, ${when}`}</h3>
+      {rows.length ? (
+        <dl className="kv kv-kec">
+          {rows.map((r) => (
+            <div key={r.name}>
+              <dt>{r.name}</dt>
+              <dd data-rain={r.level ? "" : undefined}>
+                {r.level && <span className="answer-dot" data-level={r.level} aria-hidden />}
+                {r.text}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p className="d-note">Deteksi hujan otomatis sedang gangguan, jadi lihat warna di peta.</p>
+      )}
+      <p className="d-note">
+        Dihitung dari radar MSS (1 piksel ≈ 1 km²) di atas daratan tiap kecamatan, jadi hujan di laut tidak
+        ikut. Kecamatan disebut hujan kalau luasnya minimal {KEC_RAIN_MIN_KM2} km². Ini perkiraan radar dari
+        pantulan butiran air, jadi bisa beda dengan yang kamu rasakan.
+      </p>
     </section>
   );
 }

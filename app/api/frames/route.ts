@@ -1,16 +1,16 @@
 import type { Frame } from "@/lib/radar";
 import type { EchoSummary, FramesResponse } from "@/lib/api-types";
 import { MSS_FILE_BASE } from "@/lib/sources";
-import { batamBoxStats, type EchoStats } from "@/lib/echo";
+import { batamStats, type EchoStats } from "@/lib/echo";
 
 // Citra radar 240km MSS terbit tiap 5 MENIT dengan jeda terbit ~8 menit. Daripada nebak
 // jeda pakai angka tetap, server PROBE file paling baru yang BENERAN udah terbit, lalu
 // susun 30 frame mundur dari situ → selalu sefresh mungkin.
 //
-// Sekalian menjawab pertanyaan inti — "sekitar Batam lagi ada echo hujan nggak?" —
-// dengan menghitung piksel PNG di kotak Batam (lib/echo.ts). Frame terbaru selalu
-// dihitung; kalau kosong, mundur maksimal 1 jam mencari echo terakhir. Hasil per-ts
-// di-cache di module (PNG per timestamp tidak pernah berubah).
+// Sekalian menjawab pertanyaan inti — "kecamatan mana di Batam yang lagi hujan?" —
+// dengan menghitung piksel PNG di daratan tiap kecamatan (lib/echo.ts). Frame terbaru
+// selalu dihitung; kalau tak ada yang hujan, mundur maksimal 1 jam mencari hujan terakhir.
+// Hasil per-ts di-cache di module (PNG per timestamp tidak pernah berubah).
 //
 // Dynamic: respons dihitung ulang per request (jam frame selalu terbaru). CDN boleh
 // nahan 30 detik (s-maxage) — beda dengan ISR/prerender yang dulu bikin "jam beku":
@@ -134,7 +134,7 @@ async function echoFor(ts: string): Promise<EchoStats | null | undefined> {
       return null;
     }
     if (!r.ok) return undefined;
-    const stats = batamBoxStats(Buffer.from(await r.arrayBuffer()));
+    const stats = batamStats(Buffer.from(await r.arrayBuffer()));
     if (echoCache.size >= ECHO_CACHE_MAX) {
       const oldest = echoCache.keys().next().value;
       if (oldest !== undefined) echoCache.delete(oldest);
@@ -167,7 +167,8 @@ async function echoSummary(frames: Frame[]): Promise<EchoSummary | null> {
     coverage: Math.round(now.coverage * 1000) / 1000,
     level: now.level,
     byClass: now.byClass,
-    boxPx: now.boxPx,
+    landKm2: now.landKm2,
+    kec: now.kec,
     lastTs,
     lookbackMin: ECHO_LOOKBACK * STEP_MIN,
   };

@@ -1,19 +1,22 @@
 // Bentuk respons route handler — DIPAKAI BERSAMA server (anotasi tipe) & klien (import),
 // biar field nggak "disalin tangan" lalu diam-diam beda.
+import type { KecEcho } from "./kecamatan";
 import type { Frame } from "./radar";
 
 export type EchoSummary = {
-  /** ada pantulan hujan berarti di kotak BATAM_BOX (≈45×45 km) pada frame terbaru */
+  /** ada kecamatan Kota Batam yang hujan (≥ KEC_RAIN_MIN_KM2 di daratannya) pada frame terbaru */
   near: boolean;
-  /** fraksi kotak yang terisi pantulan pada frame terbaru, 0–1 */
+  /** fraksi daratan Kota Batam yang terkena pantulan pada frame terbaru, 0–1 */
   coverage: number;
-  /** kelas intensitas tertinggi ≥3 px (dari palet MSS): ringan | sedang | lebat */
+  /** kelas tertinggi di antara kecamatan yang hujan (palet MSS): ringan | sedang | lebat */
   level: "ringan" | "sedang" | "lebat" | null;
-  /** piksel per kelas (1 px ≈ 1 km²). Opsional: respons dari cache lama belum punya. */
+  /** km² per kelas di seluruh daratan Kota Batam. Opsional: respons lama belum punya. */
   byClass?: { ringan: number; sedang: number; lebat: number };
-  /** luas kotak dalam piksel */
-  boxPx?: number;
-  /** ts (SGT) frame terakhir yang punya echo dalam jendela lookback; null = tidak ada */
+  /** luas daratan Kota Batam yang terpetakan ke piksel radar (km²) */
+  landKm2?: number;
+  /** hujan per kecamatan (km², 1 desimal), 12 entri */
+  kec?: KecEcho[];
+  /** ts (SGT) frame terakhir yang ada hujannya dalam jendela lookback; null = tidak ada */
   lastTs: string | null;
   /** panjang jendela yang diperiksa ke belakang, menit */
   lookbackMin: number;

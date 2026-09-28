@@ -11,6 +11,7 @@ import type {
   PerairanEntry,
   PerairanResponse,
 } from "./api-types";
+import { KEC_TOTAL, kecLevel, rainyKec, type RainLevel } from "./kecamatan";
 import { ageMinutesOf, ofsValidWib, tsToInstant, type Frame } from "./radar";
 
 /** Di atas ini citra radar dianggap terlambat (MSS terlambat/macet). */
@@ -19,13 +20,11 @@ export const LIVE_MAX_AGE_MIN = 18;
 export const RADAR_OLD_MIN = 60;
 /** Run OFS lebih tua dari 2 siklus (12 jam) = BMKG mandek. Umur wajar run terbaru 8–20 jam. */
 export const OFS_STALE_H = 24;
-/** Kelas hujan baru disebut kalau luasnya ≥ ini (1 px radar = 1 km²). */
+/** Respons lama (tanpa per kecamatan): kelas baru disebut kalau luasnya ≥ ini (1 px = 1 km²). */
 export const LEVEL_MIN_PX = 10;
-/** Di bawah ini piksel dianggap noise (sama dengan MIN_PX di lib/echo.ts). */
-const NOISE_PX = 3;
 
 export type LoadStatus = "loading" | "ok" | "error";
-export type EchoLevel = NonNullable<EchoSummary["level"]>;
+export type EchoLevel = RainLevel;
 export type Tone = "normal" | "muted" | "warn";
 export type Answer = {
   headline: string;
@@ -172,9 +171,13 @@ export function radarView(a: {
   };
 }
 
-/** Kelas hujan yang JUJUR: kelas tertinggi yang luasnya ≥10 km² (kumulatif ke atas); kalau tidak ada, turun. */
+/**
+ * Kelas hujan yang JUJUR. Per kecamatan (lib/kecamatan.ts): kelas terderas di antara kecamatan
+ * yang hujan. Respons lama tanpa per kecamatan: kelas tertinggi yang luasnya ≥10 km².
+ */
 export function rainLevel(e: EchoSummary): EchoLevel | null {
   if (!e.near) return null;
+  if (e.kec) return rainyKec(e.kec)[0]?.level ?? null;
   const b = e.byClass;
   if (!b) return e.level; // respons lama tanpa hitungan per kelas
   if (b.lebat >= LEVEL_MIN_PX) return "lebat";
@@ -193,18 +196,35 @@ const pctArea = (coverage: number) => {
   return p < 0.5 ? "<1" : String(Math.round(p));
 };
 
-type Cond = { text: string; level: EchoLevel | null; known: boolean };
+/** "Sekupang" · "Sekupang dan Batu Aji" · "Sekupang, Batu Aji, dan Sagulung". */
+export function joinNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? "";
+  if (names.length === 2) return `${names[0]} dan ${names[1]}`;
+  return `${names.slice(0, -1).join(", ")}, dan ${names[names.length - 1]}`;
+}
+
+/** Di mana hujannya: nama kecamatan (≤3), "5 dari 12 Kecamatan", atau "Kota Batam". */
+function rainWhere(echo: EchoSummary): string {
+  if (!echo.kec) return "Sekitar Batam"; // respons lama
+  const rainy = rainyKec(echo.kec);
+  if (!rainy.length) return "Kota Batam";
+  if (rainy.length <= 3) return joinNames(rainy.map((k) => k.name));
+  return `${rainy.length} dari ${KEC_TOTAL} Kecamatan`;
+}
+
+type Cond = { text: string; level: EchoLevel | null; known: boolean; where: string };
 function rainCond(echo: EchoSummary | null): Cond {
-  if (!echo) return { text: "Lihat Warna di Peta", level: null, known: false };
+  if (!echo) return { text: "Lihat Warna di Peta", level: null, known: false, where: "" };
+  const where = rainWhere(echo);
   if (echo.near) {
     const level = rainLevel(echo) ?? "ringan";
-    return { text: LEVEL_TEXT[level], level, known: true };
+    return { text: LEVEL_TEXT[level], level, known: true, where };
   }
-  if (echo.lastTs) return { text: "Hujan Sudah Reda", level: null, known: true };
-  return { text: "Tidak Ada Hujan", level: null, known: true };
+  if (echo.lastTs) return { text: "Hujan Sudah Reda", level: null, known: true, where };
+  return { text: "Tidak Ada Hujan", level: null, known: true, where };
 }
-/** "{Kondisi} di Sekitar Batam" (atau "Lihat Warna di Peta" kalau deteksi gagal). */
-const condSentence = (c: Cond) => (c.known ? `${c.text} di Sekitar Batam` : c.text);
+/** "Hujan Ringan di Sekupang dan Batu Aji" / "Tidak Ada Hujan di Kota Batam". */
+const condSentence = (c: Cond) => (c.known ? `${c.text} di ${c.where}` : c.text);
 
 export function rainAnswer(a: {
   echo: EchoSummary | null;
@@ -262,14 +282,17 @@ export function rainAnswer(a: {
 
   // Normal: citra terbaru segar.
   let context: string;
-  if (!echo) context = `Deteksi Hujan Gagal · Radar ${t} WIB`;
-  else if (echo.near) context = `Sekitar Batam, ${pctArea(echo.coverage)}% Area · Radar ${t} WIB`;
+  // Jam citra radar ada di ujung kanan penggeser ("Terbaru 11.30 WIB"), jadi baris konteks
+  // cukup menyebut DI MANA — muat satu baris di HP.
+  if (!echo) context = "Deteksi Hujan Gagal, Lihat Warna di Peta";
+  else if (echo.near)
+    context = echo.kec ? `Di ${cond.where}` : `Sekitar Batam, ${pctArea(echo.coverage)}% Area`;
   else if (echo.lastTs) {
     const last = frames.find((f) => f.ts === echo.lastTs)?.time;
-    context = `Sekitar Batam, Terakhir ${last ?? "—"} · Radar ${t} WIB`;
+    context = `${cond.where}, Terakhir ${last ?? "—"}`;
   } else {
     const lb = echo.lookbackMin >= 60 && echo.lookbackMin % 60 === 0 ? `${echo.lookbackMin / 60} Jam` : `${echo.lookbackMin} Menit`;
-    context = `Sekitar Batam, ${lb} Terakhir · Radar ${t} WIB`;
+    context = `${cond.where}, ${lb} Terakhir`;
   }
   const answer: Answer = {
     headline: cond.text,
@@ -279,7 +302,7 @@ export function rainAnswer(a: {
     retry: false,
     mini: mini(cond.text),
     share,
-    live: `${cond.text}. ${context}`,
+    live: `${cond.text}. ${context}. Radar ${t} WIB`,
   };
   // Penggeser di riwayat: jawaban tetap milik citra TERBARU, ditandai "Terkini:".
   if (!rv.isLatest) return { ...answer, headline: `Terkini: ${cond.text}`, tone: "muted" };
@@ -302,25 +325,30 @@ export function rainCaption(rv: RadarView, now: number): Caption {
   }
   return {
     left: rv.spanMin !== null ? lalu(rv.spanMin) : "",
-    right: rv.fresh ? "Sekarang" : rv.latestWhen,
+    right: rv.fresh ? `Terbaru ${latest.time} WIB` : rv.latestWhen,
     warn: false,
     toNow: false,
   };
 }
 
-/** Isi bagian "Radar Sekarang" di Detail (kalimat biasa). */
-export function rainDetail(e: EchoSummary | null): { coverage: string; strongest: string | null } {
-  if (!e) return { coverage: "Deteksi hujan otomatis sedang gangguan, jadi lihat warna di peta.", strongest: null };
-  if (!e.near) return { coverage: "Tidak ada hujan di kotak itu.", strongest: null };
-  const coverage = `Hujan terpantau di ${pctArea(e.coverage)}% kotak itu.`;
-  const b = e.byClass;
-  if (!b) return { coverage, strongest: null };
-  // kelas tertinggi yang bukan noise (≥3 px, ambang yang sama dengan server)
-  const top: EchoLevel | null =
-    b.lebat >= NOISE_PX ? "lebat" : b.sedang >= NOISE_PX ? "sedang" : b.ringan >= NOISE_PX ? "ringan" : null;
-  const shown = rainLevel(e);
-  if (!top || top === shown) return { coverage, strongest: null };
-  return { coverage, strongest: `Titik terderas: ${LEVEL_TEXT[top]}, sekitar ${b[top]} km².` };
+/** Tabel "Hujan per Kecamatan" di Detail: 12 baris urut nama. */
+export function kecTable(e: EchoSummary | null): { name: string; level: EchoLevel | null; text: string }[] {
+  if (!e?.kec) return [];
+  return [...e.kec]
+    .sort((a, b) => a.name.localeCompare(b.name, "id"))
+    .map((k) => {
+      const level = kecLevel(k);
+      return {
+        name: k.name,
+        level,
+        text: level ? `${LEVEL_TEXT[level]} · ${fmtM(Math.max(1, Math.round(k.rain)))} km²` : "Tidak Hujan",
+      };
+    });
+}
+
+/** Nama kecamatan yang sedang hujan beserta kelasnya (untuk garis & label di peta). */
+export function rainyMap(e: EchoSummary | null): Map<string, EchoLevel> {
+  return new Map(rainyKec(e?.kec).map((k) => [k.name, k.level]));
 }
 
 // ---- prakiraan BMKG (kelurahan) -------------------------------------------

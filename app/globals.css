@@ -39,7 +39,6 @@
   --link: #2f6fb3;
   --radar-blend: normal;
   --radar-filter: saturate(1.05);
-  --box-line: rgba(21, 23, 28, 0.45);
   --cam-pin-bg: #2f6fb3;
   --cam-pin-fg: #ffffff;
   --cam-pin-ring: rgba(255, 255, 255, 0.92);
@@ -76,7 +75,6 @@
   --link: #8fb8e8;
   --radar-blend: screen;
   --radar-filter: saturate(1.12) brightness(1.04);
-  --box-line: rgba(255, 255, 255, 0.35);
   --cam-pin-bg: #6ea2dd;
   --cam-pin-fg: #0c0d10;
   --cam-pin-ring: rgba(0, 0, 0, 0.55);
@@ -175,11 +173,45 @@ h4 {
   mix-blend-mode: var(--radar-blend);
   filter: var(--radar-filter);
 }
-/* kotak "sekitar Batam" tempat hujan dihitung */
-.leaflet-interactive.batam-box,
-path.batam-box {
-  stroke: var(--box-line);
+/* label kecamatan (KecamatanLayer): teks di tengah titik label, gaya sama dengan label kota */
+.leaflet-marker-icon.kec-label-icon {
+  overflow: visible;
   pointer-events: none;
+}
+.kec-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  color: var(--place-text);
+  font-weight: 600;
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  text-shadow: var(--place-shadow);
+}
+.kec-label.is-rain {
+  color: var(--text);
+  font-size: 11.5px;
+}
+.kec-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  box-shadow: 0 0 0 1.5px var(--cam-pin-ring);
+}
+.kec-dot[data-level="ringan"] {
+  background: var(--dot-ringan);
+}
+.kec-dot[data-level="sedang"] {
+  background: var(--dot-sedang);
+}
+.kec-dot[data-level="lebat"] {
+  background: var(--dot-lebat);
 }
 .leaflet-tooltip.place-label {
   background: transparent;
@@ -558,6 +590,29 @@ path.batam-box {
 .fc-desc {
   color: var(--text);
 }
+/* skala warna radar di panel: tiga kelas MSS */
+.rain-scale {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text-muted);
+}
+.rain-scale li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.rain-scale i {
+  width: 26px;
+  height: 8px;
+  border-radius: 999px;
+  flex: none;
+}
 .fc-inline {
   display: none;
   margin: 0;
@@ -682,6 +737,24 @@ input[type="range"].rng:disabled {
 /* area sentuh 28 px: berhenti di bawah penggeser dan di atas footer, tidak menumpuk */
 .to-now::before {
   inset: -2px -8px -8px;
+}
+
+/* ===== baris wilayah peta ===== */
+.view-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+.view-lab {
+  flex: none;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text-muted);
+}
+.view-row .segmented {
+  flex: 1;
+  min-width: 0;
 }
 
 /* ===== footer: mode + Detail/Daftar ===== */
@@ -814,6 +887,24 @@ input[type="range"].rng:disabled {
   flex-direction: column;
   gap: 4px;
 }
+/* tabel hujan per kecamatan: kolom nama cukup untuk "Belakang Padang" */
+.kv-kec > div {
+  grid-template-columns: 124px minmax(0, 1fr);
+}
+.kv-kec dd {
+  color: var(--text-muted);
+}
+.kv-kec dd[data-rain] {
+  color: var(--text);
+  font-weight: 600;
+}
+.kv-kec .answer-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  vertical-align: 0;
+}
 .kv > div {
   display: grid;
   grid-template-columns: 116px minmax(0, 1fr);
@@ -856,19 +947,10 @@ input[type="range"].rng:disabled {
 .opacity .rng {
   flex: 1;
 }
-.legend-bar {
-  height: 6px;
-  border-radius: 999px;
+/* skala tinggi ombak di panel: band diskret (hard stop) + meter */
+.ofs-scale {
+  margin-top: 12px;
 }
-.legend-labs {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 4px;
-  font-size: 13px;
-  line-height: 18px;
-  color: var(--text-muted);
-}
-/* legenda OFS: band diskret (hard stop) + skala meter + kategori resmi BMKG */
 .ofs-bar {
   height: 8px;
   width: 100%;
@@ -877,10 +959,11 @@ input[type="range"].rng:disabled {
 .ofs-ticks {
   display: flex;
   justify-content: space-between;
-  margin-top: -4px;
+  margin-top: 2px;
   font-size: 13px;
   line-height: 18px;
   color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 .ofs-cats {
   list-style: none;

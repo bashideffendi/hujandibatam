@@ -48,8 +48,8 @@ export const OMBAK_MIN_ZOOM = 5;
 // Preset view — bounding box wilayah asli (bukan center/zoom tebakan). Label dipakai
 // apa adanya di tombol "Wilayah Peta".
 export const VIEWS: Record<ViewKey, { label: string; bounds: [[number, number], [number, number]] }> = {
-  // = kotak BATAM_BOX (tempat hujan dihitung) supaya garis putusnya selalu utuh terlihat.
-  batam: { label: "Batam", bounds: [[0.9, 103.85], [1.3, 104.25]] },
+  // Pulau Batam + Belakang Padang + ujung Rempang: HP dibuka z10, laptop z11.
+  batam: { label: "Batam", bounds: [[0.96, 103.84], [1.21, 104.2]] },
   regional: { label: "Luas", bounds: [[-0.4, 102.4], [2.7, 105.3]] },
   kepri: { label: "Kepri", bounds: [[0.1, 103.25], [1.28, 104.75]] },
   // Khusus mode OMBAK: mundur ke timur-laut biar Anambas + Natuna keliatan.
@@ -67,11 +67,6 @@ export const VIEW_KEYS: Record<Mode, ViewKey[]> = {
 };
 /** View bawaan per mode (CCTV selalu kotak kamera). */
 export const defaultViewFor = (mode: Mode): ViewKey => (mode === "cctv" ? "kamera" : DEFAULT_VIEW);
-
-// Kotak "sekitar Batam" tempat hujan dihitung (lib/echo.ts, server) dan digambar sebagai
-// garis putus di peta (klien). 0,4° × 0,4° ≈ 45 × 45 km. Satu sumber untuk keduanya.
-export const BATAM_BOX = { s: 0.9, n: 1.3, w: 103.85, e: 104.25 } as const;
-export const BATAM_BOX_KM = 45;
 
 // CARTO basemap raster WAJIB API key sejak 2026-09 (tanpa key → watermark "API KEY
 // REQUIRED"). Key di env NEXT_PUBLIC_CARTO_KEY (repo PUBLIC → JANGAN hardcode).
@@ -95,10 +90,9 @@ export const LABEL_TILES: Record<ThemeMode, string> = {
 };
 export { CARTO_SUBDOMAINS };
 
-// Penanda kota buat orientasi (mode HUJAN saja).
+// Penanda kota buat orientasi (mode HUJAN saja). Batam tak perlu: sudah ada label kecamatan.
 export const PLACES: { name: string; lat: number; lng: number }[] = [
   { name: "Singapura", lat: 1.29, lng: 103.85 },
-  { name: "Batam", lat: 1.105, lng: 104.045 },
   { name: "Tg. Pinang", lat: 0.918, lng: 104.456 },
   { name: "Tg. Balai Karimun", lat: 1.0, lng: 103.43 },
   { name: "Lingga", lat: -0.2, lng: 104.6 },

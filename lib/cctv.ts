@@ -41,7 +41,7 @@ import { CCTV_HOST } from "./sources";
 export type Cam = {
   slug: string;
   name: string;
-  /** kecamatan (dipakai sebagai kelompok di Daftar) */
+  /** kecamatan — dicocokkan dengan batas resmi Satu Data Kota Batam (data/kecamatan-batam.geojson) */
   area: string;
   lat?: number;
   lng?: number;
@@ -156,10 +156,11 @@ export const CAMS: Cam[] = [
   { slug: "danganom1", name: "Taman Dang Anom", area: "Batam Kota", lat: 1.121378, lng: 104.019885 },
   { slug: "danganom3", name: "Taman Dang Anom Arah Jalan", area: "Batam Kota", lat: 1.121378, lng: 104.019885 },
   // CATATAN: slug bilang "batuaji" tapi lokasinya BUKAN Kec. Batu Aji. "damkar" =
-  // pemadam kebakaran, dan kantornya ada di Duriangkang, Sukajadi, Kec. Batam Kota
-  // (persis di sebelah Stadion Temenggung). "Arah Batu Aji" di nama = arah hadap.
-  { slug: "batuajidamkar1", name: "Depan Stadion Temenggung", area: "Batam Kota", lat: 1.088491, lng: 104.033566 },
-  { slug: "batuajidamkar3", name: "Depan Stadion Temenggung Arah Batu Aji", area: "Batam Kota", lat: 1.088491, lng: 104.033566 },
+  // pemadam kebakaran, di sebelah Stadion Temenggung. Menurut batas kecamatan resmi
+  // (Satu Data Kota Batam, dicek 2026-09-28) titik ini masuk Kec. Sei Beduk.
+  // "Arah Batu Aji" di nama = arah hadap.
+  { slug: "batuajidamkar1", name: "Depan Stadion Temenggung", area: "Sei Beduk", lat: 1.088491, lng: 104.033566 },
+  { slug: "batuajidamkar3", name: "Depan Stadion Temenggung Arah Batu Aji", area: "Sei Beduk", lat: 1.088491, lng: 104.033566 },
 ];
 
 /** Kamera yang punya koordinat → dipasang sebagai pin di peta. */

@@ -8,7 +8,6 @@ import {
   ImageOverlay,
   MapContainer,
   Pane,
-  Rectangle,
   TileLayer,
   Tooltip,
 } from "react-leaflet";
@@ -18,7 +17,6 @@ import { isSmallLandscape, isWide, saveData } from "@/lib/client";
 import { readInitialState } from "@/lib/initial-state";
 import { PREF, writePref } from "@/lib/prefs";
 import {
-  BATAM_BOX,
   CARTO_SUBDOMAINS,
   DEFAULT_VIEW,
   LABEL_TILES,
@@ -39,6 +37,7 @@ import {
   ofsCaption,
   ofsView,
   rainAnswer,
+  rainyMap,
   rainCaption,
   radarView,
 } from "@/lib/status";
@@ -50,6 +49,7 @@ import { useResource } from "@/hooks/useResource";
 import { useThemeMode } from "@/hooks/useThemeMode";
 import CctvLayer, { type CamGroup, type CctvApi } from "./CctvLayer";
 import CctvPlayer from "./CctvPlayer";
+import KecamatanLayer from "./KecamatanLayer";
 import IosInstallHint from "./IosInstallHint";
 import MapController, { type Padding } from "./MapController";
 import OfsField from "./OfsField";
@@ -61,9 +61,9 @@ import CctvBlock from "./panel/CctvBlock";
 import Conditions from "./panel/Conditions";
 import { Footer, Transport, ViewSelector } from "./panel/Controls";
 import Credit from "./panel/Credit";
-import { ForecastInfo, PerairanInfo, RadarNow } from "./panel/DetailSections";
+import { ForecastInfo, KecTable, PerairanInfo } from "./panel/DetailSections";
 import ForecastStrip from "./panel/ForecastStrip";
-import { OfsLegend, RainMeta } from "./panel/Legends";
+import { OfsCategories, OfsScale, RainOpacity, RainScale } from "./panel/Legends";
 import { Answer, WarnRow } from "./panel/Status";
 
 // ---------------------------------------------------------------------------
@@ -85,14 +85,6 @@ const MODE_META: Record<Mode, { sub: string; panel: string }> = {
   ombak: { sub: "Prakiraan Ombak BMKG", panel: "Prakiraan Ombak" },
   cctv: { sub: "Kamera Lalu Lintas Pemko Batam", panel: "Kamera Lalu Lintas" },
 };
-
-// Kotak "sekitar Batam" (tempat hujan dihitung) sebagai garis putus tipis di peta.
-const BOX_BOUNDS: [[number, number], [number, number]] = [
-  [BATAM_BOX.s, BATAM_BOX.w],
-  [BATAM_BOX.n, BATAM_BOX.e],
-];
-// className & interactive hanya dibaca Leaflet saat layer DIBUAT → prop langsung, bukan pathOptions.
-const BOX_OPTS = { className: "batam-box", weight: 1, dashArray: "4 4", fill: false, interactive: false } as const;
 
 /** Param URL yang mewakili tampilan sekarang (?mode=&view=&cam=), hanya yang bukan default. */
 function applyStateParams(p: URLSearchParams, mode: Mode, view: ViewKey, cam: Cam | null) {
@@ -406,8 +398,15 @@ export default function RadarMap() {
               eventHandlers={{ error: () => radar.markBroken(current.url) }}
             />
           )}
-          {/* Garis putus "sekitar Batam" — hanya saat yang tampil citra terbaru yang segar */}
-          {mode === "hujan" && rv.ok && <Rectangle bounds={BOX_BOUNDS} {...BOX_OPTS} />}
+          {/* Batas 12 kecamatan Kota Batam; yang sedang hujan disorot hanya saat peta
+              menampilkan citra terbaru (hujan per kecamatan dihitung dari citra itu). */}
+          {mode === "hujan" && (
+            <KecamatanLayer
+              rainy={rainyMap(radar.echo)}
+              showRain={rv.isLatest && !rv.currentBroken && radar.status === "ok"}
+              theme={theme}
+            />
+          )}
           {/* Field gelombang OFS (double-buffer, nggak berkedip) di atas basemap */}
           {mode === "ombak" && ofs.ofs?.baserun && ov.valid && (
             <OfsField
@@ -484,6 +483,7 @@ export default function RadarMap() {
         {mode === "hujan" && (
           <>
             <Answer a={rain} onRetry={rain.retry && !offline ? radar.load : undefined} />
+            <RainScale />
             {forecast.data && <ForecastStrip place={forecast.data.place} strip={strip} />}
             <Transport
               playing={playing}
@@ -498,6 +498,7 @@ export default function RadarMap() {
               caption={rainCap}
               onToNow={toNow}
             />
+            <ViewSelector keys={VIEW_KEYS.hujan} view={view} onChange={setView} />
           </>
         )}
 
@@ -506,6 +507,7 @@ export default function RadarMap() {
             {ombak.warning && <WarnRow text={ombak.warning} />}
             <Answer a={ombak} onRetry={ombak.retry ? () => ofs.load(true) : undefined} />
             {ov.problem && <WarnRow text={ov.problem} />}
+            <OfsScale />
             <Transport
               playing={playing}
               ready={ov.ready}
@@ -521,6 +523,7 @@ export default function RadarMap() {
               caption={ombakCap}
               onToNow={toNow}
             />
+            <ViewSelector keys={VIEW_KEYS.ombak} view={view} onChange={setView} />
           </>
         )}
 
@@ -551,13 +554,10 @@ export default function RadarMap() {
 
         {(
           <div id="panel-detail" className="panel-detail" hidden={!detail}>
-            {mode !== "cctv" && <ViewSelector keys={VIEW_KEYS[mode]} view={view} onChange={setView} />}
             {mode === "hujan" && (
               <>
-                {radar.frames.length > 0 && (
-                  <RadarNow echo={radar.echo} when={rv.latestWhen} fresh={rv.fresh} boxShown={rv.ok} />
-                )}
-                <RainMeta opacity={opacity} onOpacity={setOpacity} />
+                {radar.frames.length > 0 && <KecTable echo={radar.echo} when={rv.latestWhen} fresh={rv.fresh} />}
+                <RainOpacity opacity={opacity} onOpacity={setOpacity} />
                 <ForecastInfo fc={forecast.data} strip={strip} />
                 <Conditions data={conditions.data} error={conditions.error} />
               </>
@@ -565,7 +565,7 @@ export default function RadarMap() {
             {mode === "ombak" && (
               <>
                 <PerairanInfo p={ofs.perairan} error={ofs.perairanError} />
-                <OfsLegend />
+                <OfsCategories />
               </>
             )}
             {mode === "cctv" && <CamDirectory dead={deadCams} onPick={pickCam} />}
