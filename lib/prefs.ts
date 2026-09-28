@@ -7,6 +7,8 @@ export const PREF = {
   collapsed: "hujan-collapsed",
   detail: "hujan-detail",
   recentCams: "hujan-cams-recent",
+  /** "1" = petunjuk "Ketuk Pin atau Angka…" sudah tidak perlu (kamera pertama sudah dipilih) */
+  camHint: "hujan-cam-hint",
 } as const;
 
 export function readPref(key: string): string | null {

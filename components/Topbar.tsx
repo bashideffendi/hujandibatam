@@ -2,12 +2,10 @@
 
 import type { RefObject } from "react";
 import type { ThemeMode } from "@/lib/radar";
-import type { Pill } from "@/lib/status";
 import { IconDrop, IconInstall, IconMoon, IconShare, IconSun } from "./icons";
 
 type Props = {
   sub: string;
-  pill: Pill;
   theme: ThemeMode;
   onToggleTheme: () => void;
   onShare: () => void;
@@ -17,27 +15,17 @@ type Props = {
   inert: boolean;
 };
 
-// Bilah atas: wordmark + status singkat + Bagikan + tema (+ Pasang kalau browser menawarkan).
-// Di layar sempit teks pill & tombol Pasang disembunyikan (lihat globals.css) — statusnya
-// tetap tampil lengkap di panel, jadi tidak ada informasi yang hilang.
-export default function Topbar({
-  sub,
-  pill,
-  theme,
-  onToggleTheme,
-  onShare,
-  canInstall,
-  onInstall,
-  topbarRef,
-  inert,
-}: Props) {
+// Bilah atas: wordmark (+ subjudul di layar ≥701 px) + Bagikan + tema (+ Pasang kalau
+// browser menawarkan). Status data tidak di sini — keadaan terlambat/terputus jadi
+// kalimat utama di panel, jadi tidak ada pil status yang bisa salah dibaca.
+export default function Topbar({ sub, theme, onToggleTheme, onShare, canInstall, onInstall, topbarRef, inert }: Props) {
   return (
     <header className="topbar" ref={topbarRef} inert={inert}>
       <div className="brand">
         <span className="mark">
           <IconDrop />
         </span>
-        <div>
+        <div className="brand-txt">
           <h1 className="name">
             Hujan <i>di</i> Batam
           </h1>
@@ -46,27 +34,18 @@ export default function Topbar({
       </div>
       <div className="topbar-right">
         {canInstall && (
-          <button className="install-btn" onClick={onInstall} aria-label="Pasang aplikasi ke layar utama">
+          <button className="install-btn" onClick={onInstall} aria-label="Pasang Aplikasi ke Layar Utama">
             <IconInstall />
             <span className="txt">Pasang</span>
           </button>
         )}
-        <span
-          className={`live-pill${pill.kind === "muted" ? " forecast" : ""}`}
-          data-stale={pill.kind === "stale" ? "" : undefined}
-          role="img"
-          aria-label={`Status: ${pill.text}`}
-        >
-          <span className="dot" />
-          <span className="txt">{pill.text}</span>
-        </span>
-        <button className="icon-btn" onClick={onShare} aria-label="Bagikan tampilan ini">
+        <button className="icon-btn" onClick={onShare} aria-label="Bagikan Tampilan Ini">
           <IconShare />
         </button>
         <button
           className="icon-btn"
           onClick={onToggleTheme}
-          aria-label={theme === "dark" ? "Ganti ke tema terang" : "Ganti ke tema gelap"}
+          aria-label={theme === "dark" ? "Ganti ke Tema Terang" : "Ganti ke Tema Gelap"}
         >
           {theme === "dark" ? <IconSun /> : <IconMoon />}
         </button>

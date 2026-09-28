@@ -1,45 +1,39 @@
-import { UNMAPPED_CAMS, type Cam } from "@/lib/cctv";
+import type { Cam } from "@/lib/cctv";
 
 type Props = {
   recent: Cam[];
   dead: ReadonlyMap<string, number | null>;
   onPick: (cam: Cam) => void;
+  /** petunjuk cara memilih, sampai kamera pertama dipilih */
+  showHint: boolean;
 };
 
-// Isi panel khusus mode CCTV: jalan pintas ke kamera yang terakhir dibuka (armada Pemko
-// sering mati, jadi kamera yang sudah terbukti hidup berharga), petunjuk singkat, dan
-// kamera yang belum punya koordinat terverifikasi.
-export default function CctvBlock({ recent, dead, onPick }: Props) {
+// Isi panel mode CCTV di bawah jawaban: jalan pintas ke kamera yang terakhir dibuka
+// (armada Pemko sering mati, jadi kamera yang sudah terbukti hidup berharga) dan
+// petunjuk singkat. Kamera tanpa koordinat ada di Daftar.
+export default function CctvBlock({ recent, dead, onPick, showHint }: Props) {
+  if (!recent.length && !showHint) return null;
   return (
     <div className="cam-block">
       {recent.length > 0 && (
-        <div className="cam-extra cam-recent">
-          <span className="cam-extra-lab">Terakhir dibuka</span>
-          {recent.map((c) => (
-            <button
-              key={c.slug}
-              className={`cam-chip${dead.has(c.slug) ? " is-mati" : ""}`}
-              onClick={() => onPick(c)}
-            >
-              {c.name}
-              {dead.has(c.slug) ? " · mati" : ""}
-            </button>
-          ))}
+        <div className="cam-recent">
+          <div className="cam-lab" id="cam-recent-lab">
+            Baru Kamu Buka
+          </div>
+          <div className="chip-row" role="group" aria-labelledby="cam-recent-lab">
+            {recent.map((c) => {
+              const failed = dead.has(c.slug);
+              return (
+                <button key={c.slug} className="cam-chip" data-failed={failed || undefined} onClick={() => onPick(c)}>
+                  {c.name}
+                  {failed ? " · Gagal Tadi" : ""}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
-      <div className="cam-hint">
-        Ketuk pin untuk menonton. Angka = beberapa kamera berdekatan, ketuk untuk memilih.
-      </div>
-      {UNMAPPED_CAMS.length > 0 && (
-        <div className="cam-extra">
-          <span className="cam-extra-lab">Kamera lain (titik belum dipetakan)</span>
-          {UNMAPPED_CAMS.map((c) => (
-            <button key={c.slug} className="cam-chip" onClick={() => onPick(c)}>
-              {c.name}
-            </button>
-          ))}
-        </div>
-      )}
+      {showHint && <p className="cam-hint">Ketuk Pin atau Angka untuk Memilih Kamera</p>}
     </div>
   );
 }

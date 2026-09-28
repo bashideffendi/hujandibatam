@@ -1,60 +1,50 @@
-import type { ReactNode } from "react";
+import type { Answer as AnswerT } from "@/lib/status";
+import { IconWarn } from "../icons";
 
 type Props = {
-  /** angka besar: jam, atau jumlah kamera */
-  value: string;
-  /** satuan kecil di samping angka: WIB / KAMERA */
-  unit: string;
-  date: string;
-  /** tawarkan "Coba lagi" di samping teks tanggal */
+  a: Pick<AnswerT, "headline" | "tone" | "dot" | "context">;
+  /** tawarkan "Coba Lagi" di ujung baris konteks */
   onRetry?: () => void;
-  state: string;
-  /** teks state berwarna peringatan (data tertunda/gangguan) */
-  warn: boolean;
-  dot: "live" | "dim" | "warn";
 };
 
-const DOT: Record<Props["dot"], string> = {
-  live: "var(--live-dot)",
-  dim: "var(--text-dim)",
-  warn: "#f59e0b",
-};
-
-/** Blok status di puncak panel: waktu/jumlah di kiri, keadaan data di kanan. */
-export function StatusBlock({ value, unit, date, onRetry, state, warn, dot }: Props) {
+/**
+ * Puncak panel: SATU jawaban (teks terbesar) + satu baris konteks. Semua penjelasan
+ * lain ada di Detail. Titik di depan jawaban = warna kelas hujan dari palet MSS.
+ */
+export function Answer({ a, onRetry }: Props) {
   return (
-    <div className="status">
-      <div>
-        <div className="time">
-          {value}
-          <span className="wib">{unit}</span>
-        </div>
-        <div className="date">
-          {date}
+    <div className="answer-block">
+      <h2 className="answer" data-tone={a.tone} tabIndex={-1}>
+        {a.dot && <span className="answer-dot" data-level={a.dot} aria-hidden />}
+        <span>{a.headline}</span>
+      </h2>
+      {(a.context || onRetry) && (
+        <p className="context">
+          {a.context}
           {onRetry && (
-            <>
-              {" "}
-              <button className="link-btn" onClick={onRetry}>
-                Coba lagi
-              </button>
-            </>
+            <button
+              className="link-btn retry-btn"
+              onClick={(e) => {
+                // tombol hilang begitu muat ulang berhasil → pindahkan fokus ke jawaban dulu
+                e.currentTarget.closest(".answer-block")?.querySelector<HTMLElement>(".answer")?.focus();
+                onRetry();
+              }}
+            >
+              Coba Lagi
+            </button>
           )}
-        </div>
-      </div>
-      <div className={`state${warn ? " is-stale" : ""}`}>
-        <span className="d" style={{ background: DOT[dot] }} />
-        {state}
-      </div>
+        </p>
+      )}
     </div>
   );
 }
 
-/** Satu baris info selebar panel (echo radar, prakiraan BMKG, prakiraan perairan). */
-export function InfoLine({ on, warn, children }: { on?: boolean; warn?: boolean; children: ReactNode }) {
+/** Baris peringatan (BMKG) atau masalah data — ikon segitiga + teks warna peringatan. */
+export function WarnRow({ text }: { text: string }) {
   return (
-    <div className={`info-line${on ? " is-on" : ""}${warn ? " has-warn" : ""}`}>
-      <span className="d" />
-      <span>{children}</span>
-    </div>
+    <p className="warn-row">
+      <IconWarn className="warn-ico" />
+      <span>{text}</span>
+    </p>
   );
 }

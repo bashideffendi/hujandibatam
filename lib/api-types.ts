@@ -3,12 +3,16 @@
 import type { Frame } from "./radar";
 
 export type EchoSummary = {
-  /** ada echo radar berarti di kotak Batam ±20 km pada frame terbaru */
+  /** ada pantulan hujan berarti di kotak BATAM_BOX (≈45×45 km) pada frame terbaru */
   near: boolean;
-  /** fraksi kotak yang ber-echo pada frame terbaru, 0–1 */
+  /** fraksi kotak yang terisi pantulan pada frame terbaru, 0–1 */
   coverage: number;
-  /** kelas intensitas tertinggi (dari palet MSS): ringan | sedang | lebat */
+  /** kelas intensitas tertinggi ≥3 px (dari palet MSS): ringan | sedang | lebat */
   level: "ringan" | "sedang" | "lebat" | null;
+  /** piksel per kelas (1 px ≈ 1 km²). Opsional: respons dari cache lama belum punya. */
+  byClass?: { ringan: number; sedang: number; lebat: number };
+  /** luas kotak dalam piksel */
+  boxPx?: number;
   /** ts (SGT) frame terakhir yang punya echo dalam jendela lookback; null = tidak ada */
   lastTs: string | null;
   /** panjang jendela yang diperiksa ke belakang, menit */

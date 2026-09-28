@@ -15,7 +15,7 @@ export type Frame = {
 };
 
 export type ThemeMode = "light" | "dark";
-export type ViewKey = "batam" | "regional" | "kepri" | "natuna";
+export type ViewKey = "batam" | "regional" | "kepri" | "natuna" | "kamera";
 // Mode tampilan: HUJAN (radar) · OMBAK (field gelombang OFS BMKG) · CCTV (kamera Batam).
 export type Mode = "hujan" | "ombak" | "cctv";
 
@@ -39,28 +39,39 @@ export const RADAR_KM_PER_PX = 1;
 export const MIN_ZOOM = 7;
 export const MAX_ZOOM = 12; // dikunci: lebih dari ini radar (1 km/px) mulai pecah
 // Mode CCTV nggak punya overlay radar, jadi batas 12 di atas nggak relevan di sana.
-// Perlu zoom dalam biar pin kamera yang berdempet bisa dipisah dan diklik satu-satu.
-export const CCTV_MAX_ZOOM = 18;
+// Di zoom 17 semua pin sudah terpisah (kipas layar 24 px, jarak minimum ±45 px) —
+// lebih dalam dari itu tidak ada gunanya.
+export const CCTV_MAX_ZOOM = 17;
 // Mode OMBAK: boleh zoom-out lebih jauh (nggak ada radar yang pecah) biar laut jauh keliatan.
 export const OMBAK_MIN_ZOOM = 5;
 
-// Preset view — bounding box wilayah asli (bukan center/zoom tebakan).
-export const VIEWS: Record<
-  ViewKey,
-  { label: string; sub: string; bounds: [[number, number], [number, number]] }
-> = {
-  batam: { label: "Kota Batam", sub: "fokus", bounds: [[0.98, 103.9], [1.19, 104.16]] },
-  regional: { label: "Regional", sub: "240 km", bounds: [[-0.4, 102.4], [2.7, 105.3]] },
-  kepri: { label: "Kepri", sub: "provinsi", bounds: [[0.1, 103.25], [1.28, 104.75]] },
+// Preset view — bounding box wilayah asli (bukan center/zoom tebakan). Label dipakai
+// apa adanya di tombol "Wilayah Peta".
+export const VIEWS: Record<ViewKey, { label: string; bounds: [[number, number], [number, number]] }> = {
+  // = kotak BATAM_BOX (tempat hujan dihitung) supaya garis putusnya selalu utuh terlihat.
+  batam: { label: "Batam", bounds: [[0.9, 103.85], [1.3, 104.25]] },
+  regional: { label: "Luas", bounds: [[-0.4, 102.4], [2.7, 105.3]] },
+  kepri: { label: "Kepri", bounds: [[0.1, 103.25], [1.28, 104.75]] },
   // Khusus mode OMBAK: mundur ke timur-laut biar Anambas + Natuna keliatan.
-  natuna: { label: "Natuna", sub: "laut lepas", bounds: [[-1.4, 102.6], [4.8, 108.2]] },
+  natuna: { label: "Natuna", bounds: [[-1.4, 102.6], [4.8, 108.2]] },
+  // Khusus mode CCTV: kotak 28 kamera (1,0346–1,1668 LU, 103,928–104,132 BT) + margin
+  // ±0,005°. Lebarnya ±312 px di zoom 11 → HP 360/375 px dibuka di z11 (kelompok maks 8),
+  // bukan z10 (kelompok 18–21) seperti saat masih memakai view "batam".
+  kamera: { label: "Kamera", bounds: [[1.03, 103.923], [1.172, 104.137]] },
 };
 export const DEFAULT_VIEW: ViewKey = "batam";
 export const VIEW_KEYS: Record<Mode, ViewKey[]> = {
-  hujan: ["batam", "regional", "kepri"],
-  ombak: ["batam", "regional", "kepri", "natuna"],
-  cctv: ["batam"],
+  hujan: ["batam", "kepri", "regional"],
+  ombak: ["batam", "kepri", "regional", "natuna"],
+  cctv: ["kamera"],
 };
+/** View bawaan per mode (CCTV selalu kotak kamera). */
+export const defaultViewFor = (mode: Mode): ViewKey => (mode === "cctv" ? "kamera" : DEFAULT_VIEW);
+
+// Kotak "sekitar Batam" tempat hujan dihitung (lib/echo.ts, server) dan digambar sebagai
+// garis putus di peta (klien). 0,4° × 0,4° ≈ 45 × 45 km. Satu sumber untuk keduanya.
+export const BATAM_BOX = { s: 0.9, n: 1.3, w: 103.85, e: 104.25 } as const;
+export const BATAM_BOX_KM = 45;
 
 // CARTO basemap raster WAJIB API key sejak 2026-09 (tanpa key → watermark "API KEY
 // REQUIRED"). Key di env NEXT_PUBLIC_CARTO_KEY (repo PUBLIC → JANGAN hardcode).
@@ -150,20 +161,21 @@ export const OFS_CATEGORIES: { label: string; from: number; to: number }[] = [
   { label: "Rendah", from: 0.5, to: 1.25 },
   { label: "Sedang", from: 1.25, to: 2.5 },
   { label: "Tinggi", from: 2.5, to: 4 },
-  { label: "Sgt tinggi", from: 4, to: 6 },
+  { label: "Sangat Tinggi", from: 4, to: 6 },
   { label: "Ekstrem", from: 6, to: 7 },
 ];
 
 const HARI = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
 const BULAN = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
-// "202606241500" (UTC) → { time:"22.00", date:"Rab, 24 Jun" } WIB (+7 jam).
-export function ofsValidWib(valid: string): { time: string; date: string } {
+// "202606241500" (UTC) → { time:"22.00", day:"Rab", date:"Rab, 24 Jun" } WIB (+7 jam).
+export function ofsValidWib(valid: string): { time: string; day: string; date: string } {
   const m = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(valid);
-  if (!m) return { time: "—", date: "" };
+  if (!m) return { time: "—", day: "", date: "" };
   const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) + 7 * 3600 * 1000);
   const p = (n: number) => String(n).padStart(2, "0");
   return {
     time: `${p(d.getUTCHours())}.${p(d.getUTCMinutes())}`,
+    day: HARI[d.getUTCDay()],
     date: `${HARI[d.getUTCDay()]}, ${d.getUTCDate()} ${BULAN[d.getUTCMonth()]}`,
   };
 }

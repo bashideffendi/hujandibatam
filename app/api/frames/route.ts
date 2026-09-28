@@ -166,6 +166,8 @@ async function echoSummary(frames: Frame[]): Promise<EchoSummary | null> {
     near: now.near,
     coverage: Math.round(now.coverage * 1000) / 1000,
     level: now.level,
+    byClass: now.byClass,
+    boxPx: now.boxPx,
     lastTs,
     lookbackMin: ECHO_LOOKBACK * STEP_MIN,
   };

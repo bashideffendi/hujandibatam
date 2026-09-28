@@ -1,11 +1,4 @@
-import {
-  LEGEND,
-  LEGEND_LABELS,
-  OFS_CATEGORIES,
-  OFS_MAX_M,
-  OFS_SWH_COLORS,
-  RADAR_KM_PER_PX,
-} from "@/lib/radar";
+import { LEGEND, LEGEND_LABELS, OFS_CATEGORIES, OFS_MAX_M, OFS_SWH_COLORS } from "@/lib/radar";
 import { fmtM } from "@/lib/status";
 
 // Legend gelombang: HARD STOP per band (peta contourf memakai satu warna per band, bukan gradien).
@@ -18,16 +11,17 @@ const OFS_GRADIENT = `linear-gradient(to right, ${OFS_SWH_COLORS.map((s, i) => {
 const RAIN_GRADIENT = `linear-gradient(to right, ${LEGEND.join(", ")})`;
 const TICKS = Array.from({ length: OFS_MAX_M + 1 }, (_, i) => i);
 
-/** Kepekatan overlay radar + legenda intensitas hujan (skala resmi MSS: ringan → lebat). */
+/** Ketebalan warna radar + legenda intensitas hujan (skala resmi MSS: ringan → lebat). */
 export function RainMeta({ opacity, onOpacity }: { opacity: number; onOpacity: (v: number) => void }) {
   return (
-    <div className="meta">
+    <section className="d-sec">
+      <h3 className="d-title">Warna Hujan</h3>
       <label className="opacity">
-        Kepekatan
+        <span>Tipis</span>
         <input
           className="rng"
           type="range"
-          aria-label="Kepekatan overlay radar"
+          aria-label="Ketebalan Warna Radar"
           aria-valuetext={`${Math.round(opacity * 100)}%`}
           min={0.3}
           max={1}
@@ -35,39 +29,41 @@ export function RainMeta({ opacity, onOpacity }: { opacity: number; onOpacity: (
           value={opacity}
           onChange={(e) => onOpacity(Number(e.target.value))}
         />
+        <span>Tebal</span>
       </label>
-      <div
-        className="legend"
-        title={`Skala MSS: ringan → sedang → lebat · resolusi radar ~${RADAR_KM_PER_PX} km`}
-      >
-        <span className="lab">{LEGEND_LABELS[0]}</span>
-        <div className="bar" style={{ background: RAIN_GRADIENT }} />
-        <span className="lab">{LEGEND_LABELS[2]}</span>
+      <div className="legend">
+        <div className="legend-bar" style={{ background: RAIN_GRADIENT }} />
+        <div className="legend-labs">
+          {LEGEND_LABELS.map((l) => (
+            <span key={l}>{l}</span>
+          ))}
+        </div>
       </div>
-    </div>
+    </section>
   );
 }
 
-/** Legenda tinggi gelombang signifikan (swh) + kategori resmi BMKG. */
+/** Legenda tinggi gelombang signifikan + kategori resmi BMKG. */
 export function OfsLegend() {
   return (
-    <div className="meta">
-      <div className="ofs-legend">
-        <span className="ofs-lab">Tinggi gelombang signifikan (m) · BMKG</span>
-        <div className="ofs-bar" style={{ background: OFS_GRADIENT }} />
-        <div className="ofs-ticks">
-          {TICKS.map((m) => (
-            <span key={m}>{m}</span>
-          ))}
-        </div>
-        <div className="ofs-cats">
-          {OFS_CATEGORIES.map((c, i) => (
-            <span key={c.label}>
-              {c.label} {i === OFS_CATEGORIES.length - 1 ? `>${fmtM(c.from)}` : `${fmtM(c.from)}–${fmtM(c.to)}`}
-            </span>
-          ))}
-        </div>
+    <section className="d-sec">
+      <h3 className="d-title">Tinggi Ombak (meter)</h3>
+      <div className="ofs-bar" style={{ background: OFS_GRADIENT }} />
+      <div className="ofs-ticks" aria-hidden>
+        {TICKS.map((m) => (
+          <span key={m}>{m}</span>
+        ))}
       </div>
-    </div>
+      <ul className="ofs-cats">
+        {OFS_CATEGORIES.map((c, i) => (
+          <li key={c.label}>
+            <b>{c.label}</b> {i === OFS_CATEGORIES.length - 1 ? `>${fmtM(c.from)}` : `${fmtM(c.from)}–${fmtM(c.to)}`}
+          </li>
+        ))}
+      </ul>
+      <p className="d-note">
+        Tinggi ombak di peta adalah rerata sepertiga ombak tertinggi (gelombang signifikan) dari model BMKG.
+      </p>
+    </section>
   );
 }

@@ -94,9 +94,9 @@ export function useShare() {
       }
       try {
         await navigator.clipboard.writeText(p.url);
-        show("Tautan disalin");
+        show("Tautan Disalin");
       } catch {
-        show("Nggak bisa menyalin — salin dari bilah alamat");
+        show("Belum Bisa Menyalin, Salin dari Bilah Alamat");
       }
     },
     [show],

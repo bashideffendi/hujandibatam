@@ -65,6 +65,22 @@ export const IconChevronUp = ({ className }: P) => (
     <path d="M6 15l6-6 6 6" />
   </svg>
 );
+export const IconChevronRight = ({ className }: P) => (
+  <svg className={className} {...line} strokeWidth={2}>
+    <path d="M9 6l6 6-6 6" />
+  </svg>
+);
+export const IconClose = ({ className }: P) => (
+  <svg className={className} {...line} strokeWidth={2}>
+    <path d="M6 6l12 12M18 6L6 18" />
+  </svg>
+);
+export const IconWarn = ({ className }: P) => (
+  <svg className={className} {...line} strokeWidth={2}>
+    <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+    <path d="M12 9v4M12 17h.01" />
+  </svg>
+);
 export const IconPlay = () => (
   <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
     <path d="M8 5v14l11-7z" />

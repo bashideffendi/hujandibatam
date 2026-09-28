@@ -1,23 +1,43 @@
+import { useRef, type KeyboardEvent } from "react";
 import { VIEWS, type Mode, type ViewKey } from "@/lib/radar";
-import { IconCam, IconChevronDown, IconDrop, IconPause, IconPlay, IconWave } from "../icons";
+import type { Caption } from "@/lib/status";
+import { IconChevronDown, IconPause, IconPlay } from "../icons";
 
-const MODES: { key: Mode; label: string; Icon: (p: { className?: string }) => React.ReactElement }[] = [
-  { key: "hujan", label: "Hujan", Icon: IconDrop },
-  { key: "ombak", label: "Ombak", Icon: IconWave },
-  { key: "cctv", label: "CCTV", Icon: IconCam },
+const MODES: { key: Mode; label: string }[] = [
+  { key: "hujan", label: "Hujan" },
+  { key: "ombak", label: "Ombak" },
+  { key: "cctv", label: "CCTV" },
 ];
 
+/**
+ * Pilihan mode = radiogroup: satu tombol aktif (tabindex 0), panah kiri/kanan pindah
+ * sekaligus memilih. Tombol aktif putih bergaris, bukan biru — aksen hanya untuk data.
+ */
 export function ModeSwitch({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => void }) {
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const onKey = (e: KeyboardEvent, i: number) => {
+    const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+    if (!step) return;
+    e.preventDefault();
+    const j = (i + step + MODES.length) % MODES.length;
+    onChange(MODES[j].key);
+    refs.current[j]?.focus();
+  };
   return (
-    <div className="mode-switch" role="group" aria-label="Pilih tampilan">
-      {MODES.map(({ key, label, Icon }) => (
+    <div className="mode-switch" role="radiogroup" aria-label="Pilih Tampilan">
+      {MODES.map(({ key, label }, i) => (
         <button
           key={key}
-          className={`mode-btn ${mode === key ? "active" : ""}`}
+          ref={(el) => {
+            refs.current[i] = el;
+          }}
+          className="mode-btn"
+          role="radio"
+          aria-checked={mode === key}
+          tabIndex={mode === key ? 0 : -1}
           onClick={() => onChange(key)}
-          aria-pressed={mode === key}
+          onKeyDown={(e) => onKey(e, i)}
         >
-          <Icon className="mode-ico" />
           {label}
         </button>
       ))}
@@ -35,24 +55,29 @@ export function ViewSelector({
   onChange: (v: ViewKey) => void;
 }) {
   return (
-    <div
-      className="segmented"
-      role="group"
-      aria-label="Pilih cakupan"
-      style={{ gridTemplateColumns: `repeat(${keys.length}, 1fr)` }}
-    >
-      {keys.map((k) => (
-        <button
-          key={k}
-          className={`seg-btn ${view === k ? "active" : ""}`}
-          onClick={() => onChange(k)}
-          aria-pressed={view === k}
-        >
-          {VIEWS[k].label}
-          <span className="k">{VIEWS[k].sub}</span>
-        </button>
-      ))}
-    </div>
+    <section className="d-sec">
+      <h3 className="d-title" id="view-title">
+        Wilayah Peta
+      </h3>
+      <div
+        className="segmented"
+        role="group"
+        aria-labelledby="view-title"
+        style={{ gridTemplateColumns: `repeat(${keys.length}, 1fr)` }}
+      >
+        {keys.map((k) => (
+          <button
+            key={k}
+            className="seg-btn"
+            data-active={view === k}
+            onClick={() => onChange(k)}
+            aria-pressed={view === k}
+          >
+            {VIEWS[k].label}
+          </button>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -60,61 +85,95 @@ type TransportProps = {
   playing: boolean;
   ready: boolean;
   onTogglePlay: () => void;
+  playLabel: string;
   label: string;
   valueText: string;
   max: number;
   value: number;
   onScrub: (v: number) => void;
-  detail: boolean;
-  onToggleDetail: () => void;
+  caption: Caption;
+  onToNow: () => void;
 };
 
 /**
- * Baris timeline: Putar/Jeda + penggeser waktu + tombol Detail. Tombol Detail hanya
- * tampil di layar sempit (di layar lebar bagian detail selalu terbuka).
+ * Putar/Jeda + penggeser waktu, dengan caption kiri/kanan di bawah track (masih di
+ * dalam tinggi 44 px). Di riwayat, sisi kanan jadi tombol "Ke Sekarang".
  */
 export function Transport({
   playing,
   ready,
   onTogglePlay,
+  playLabel,
   label,
   valueText,
   max,
   value,
   onScrub,
-  detail,
-  onToggleDetail,
+  caption,
+  onToNow,
 }: TransportProps) {
+  const rangeRef = useRef<HTMLInputElement>(null);
   return (
     <div className="transport">
-      <button
-        className="play"
-        onClick={onTogglePlay}
-        disabled={!ready}
-        aria-label={playing ? "Jeda" : "Putar"}
-        style={{ opacity: ready ? 1 : 0.5 }}
-      >
+      <button className="play" onClick={onTogglePlay} disabled={!ready} aria-label={playing ? "Jeda" : playLabel}>
         {playing ? <IconPause /> : <IconPlay />}
       </button>
-      <input
-        className="rng"
-        type="range"
-        aria-label={label}
-        aria-valuetext={valueText}
-        min={0}
-        max={max}
-        value={value}
-        disabled={!ready}
-        onChange={(e) => onScrub(Number(e.target.value))}
-      />
-      <button
-        className="detail-toggle"
-        onClick={onToggleDetail}
-        aria-expanded={detail}
-        aria-controls="panel-detail"
-        aria-label={detail ? "Sembunyikan detail" : "Tampilkan detail: cakupan, kondisi, dan legenda"}
-      >
-        Detail
+      <div className="scrub">
+        <input
+          ref={rangeRef}
+          className="rng"
+          type="range"
+          aria-label={label}
+          aria-valuetext={valueText}
+          min={0}
+          max={max}
+          value={value}
+          disabled={!ready}
+          onChange={(e) => onScrub(Number(e.target.value))}
+        />
+        <div className="caps">
+          <span className="cap-left" data-warn={caption.warn || undefined}>
+            {caption.left}
+          </span>
+          {caption.toNow ? (
+            <button
+              className="link-btn to-now"
+              onClick={() => {
+                onToNow();
+                // tombol ini hilang begitu kembali ke sekarang → fokus jangan jatuh ke body
+                rangeRef.current?.focus();
+              }}
+            >
+              Ke Sekarang
+            </button>
+          ) : (
+            caption.right && <span className="cap-right">{caption.right}</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Baris bawah panel: pilihan mode + tombol Detail (Hujan/Ombak) atau Daftar (CCTV). */
+export function Footer({
+  mode,
+  onMode,
+  detailLabel,
+  detail,
+  onToggleDetail,
+}: {
+  mode: Mode;
+  onMode: (m: Mode) => void;
+  detailLabel: string;
+  detail: boolean;
+  onToggleDetail: () => void;
+}) {
+  return (
+    <div className="panel-foot">
+      <ModeSwitch mode={mode} onChange={onMode} />
+      <button className="detail-toggle" onClick={onToggleDetail} aria-expanded={detail} aria-controls="panel-detail">
+        {detailLabel}
         <IconChevronDown className="detail-chevron" />
       </button>
     </div>

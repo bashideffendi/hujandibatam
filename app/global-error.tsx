@@ -7,9 +7,9 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
       <body style={{ margin: 0, background: "#0c0d10", color: "#f2f3f5", fontFamily: "system-ui, sans-serif" }}>
         <main style={{ minHeight: "100vh", display: "grid", placeItems: "center", padding: 24 }} role="alert">
           <div style={{ maxWidth: 360, textAlign: "center" }}>
-            <div style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>Hujan di Batam lagi ngambek</div>
+            <div style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>Hujan di Batam Belum Bisa Dibuka</div>
             <p style={{ fontSize: 14, lineHeight: 1.5, opacity: 0.75, margin: "0 0 16px" }}>
-              Ada yang nyangkut. Coba muat ulang halamannya.
+              Ada kendala saat membuka aplikasi. Coba muat ulang halamannya.
             </p>
             <button
               onClick={() => reset()}
@@ -25,9 +25,9 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
                 minHeight: 44,
               }}
             >
-              Coba lagi
+              Coba Lagi
             </button>
-            {error?.digest && <div style={{ fontSize: 11, opacity: 0.5, marginTop: 12 }}>kode: {error.digest}</div>}
+            {error?.digest && <div style={{ fontSize: 11, opacity: 0.5, marginTop: 12 }}>Kode: {error.digest}</div>}
           </div>
         </main>
       </body>

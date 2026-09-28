@@ -45,9 +45,9 @@ export default function IosInstallHint() {
         <path d="M6 12.5V19a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-6.5" />
       </svg>
       <span>
-        Pasang ke iPhone: ketuk <b>Bagikan</b> lalu <b>&ldquo;Add to Home Screen&rdquo;</b>
+        Pasang di iPhone/iPad: Ketuk <b>Bagikan</b>, lalu <b>Tambah ke Layar Utama</b> (Add to Home Screen)
       </span>
-      <button className="ios-hint-x" onClick={close} aria-label="Tutup petunjuk">
+      <button className="ios-hint-x" onClick={close} aria-label="Tutup Petunjuk">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden>
           <path d="M6 6l12 12M18 6L6 18" />
         </svg>

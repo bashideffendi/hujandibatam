@@ -1,70 +1,69 @@
 import type { ConditionsResponse } from "@/lib/api-types";
-import { IconDrop, IconUv, IconWind } from "../icons";
+import { arahLengkap, titleCase } from "@/lib/status";
+import { IconWind } from "../icons";
 
 const nf1 = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 1 });
 
-// Strip kondisi dari stasiun NEA Singapura. SEMUANYA proksi buat Batam — keterangan itu
-// ditampilkan sebagai teks (bukan cuma `title`, yang tak pernah muncul di layar sentuh).
+// Data stasiun NEA Singapura — PEMBANDING, bukan pengukuran Batam. Judul bagiannya
+// menyebut itu terang-terangan supaya tidak dibaca sebagai kondisi Batam.
 export default function Conditions({ data, error }: { data: ConditionsResponse | null; error: boolean }) {
-  if (!data) {
-    return error ? <div className="conditions-err">Data cuaca tambahan lagi nggak tersedia</div> : null;
-  }
-  const { nowcast, rain, aq, uv, wind } = data;
-  if (!nowcast && !rain && !aq && !uv && !wind) return null;
+  const { nowcast, rain, aq, uv, wind } = data ?? {};
+  const any = !!(nowcast || rain || aq || uv || wind);
+  if (!any && !error) return null;
   return (
-    <div className="conditions-wrap">
-      <div className="conditions">
-        {nowcast && (
-          <span
-            className={`chip${nowcast.rain ? " is-rain" : ""}`}
-            title={`Prakiraan 2 jam NEA area ${nowcast.area}: ${nowcast.raw}`}
-          >
-            <IconDrop className="rain-ico" />
-            2 jam <b>{nowcast.text}</b>
-            <span className="chip-sub">SG · {nowcast.area}</span>
-          </span>
-        )}
-        {rain && (
-          <span
-            className="chip is-rain"
-            title={`Curah hujan 5 menit ${nf1.format(rain.mm)} mm di ${rain.station} — stasiun Singapura terdekat`}
-          >
-            <IconDrop className="rain-ico" />
-            Hujan <b>{nf1.format(rain.mm)} mm</b>
-            <span className="chip-sub">SG · {rain.station}</span>
-          </span>
-        )}
-        {aq && (
-          <span
-            className="chip"
-            title={`PSI (indeks polusi) 24 jam ${aq.psi}${
-              aq.pm25 != null ? ` · PM2.5 24 jam ${aq.pm25} µg/m³` : ""
-            } — region Singapura selatan`}
-          >
-            <span className="chip-dot" style={{ background: aq.color }} />
-            Udara <b>{aq.psi}</b>
-            <span className="chip-sub">{aq.label}</span>
-          </span>
-        )}
-        {uv && (
-          <span className="chip" title={`Indeks UV jam ini ${uv.value} (Singapura, lintang sama)`}>
-            <IconUv className="uv-ico" color={uv.color} />
-            UV <b>{uv.value}</b>
-            <span className="chip-sub">{uv.label}</span>
-          </span>
-        )}
-        {wind && (
-          <span
-            className="chip"
-            title={`Angin ${wind.knots} knot dari ${wind.label}${wind.station ? ` · ${wind.station}` : ""}`}
-          >
-            <IconWind className="wind-arrow" deg={wind.deg} />
-            Angin <b>{wind.speed} km/j</b>
-            <span className="chip-sub">dari {wind.label}</span>
-          </span>
-        )}
-      </div>
-      <div className="conditions-note">Stasiun NEA Singapura terdekat · proksi buat Batam</div>
-    </div>
+    <section className="d-sec">
+      <h3 className="d-title">Pembanding dari Singapura (NEA)</h3>
+      {!any ? (
+        <p className="d-note">Data pembanding Singapura sedang tidak tersedia.</p>
+      ) : (
+        <>
+          <dl className="kv">
+            {nowcast && (
+              <div>
+                <dt>Prakiraan 2 Jam</dt>
+                <dd>
+                  {titleCase(nowcast.text)}, Area {nowcast.area}
+                </dd>
+              </div>
+            )}
+            {rain && (
+              <div>
+                <dt>Hujan 5 Menit</dt>
+                <dd>
+                  {nf1.format(rain.mm)} mm di Stasiun {rain.station}
+                </dd>
+              </div>
+            )}
+            {aq && (
+              <div>
+                <dt>Udara</dt>
+                <dd>
+                  <span className="kv-dot" style={{ background: aq.color }} aria-hidden />
+                  {titleCase(aq.label)} (PSI {aq.psi})
+                </dd>
+              </div>
+            )}
+            {uv && (
+              <div>
+                <dt>UV</dt>
+                <dd>
+                  {uv.value}, {titleCase(uv.label)}
+                </dd>
+              </div>
+            )}
+            {wind && (
+              <div>
+                <dt>Angin</dt>
+                <dd>
+                  <IconWind className="wind-arrow" deg={wind.deg} />
+                  {wind.speed} km/j dari {arahLengkap(wind.label)}
+                </dd>
+              </div>
+            )}
+          </dl>
+          {aq && <p className="d-note">PSI: indeks polusi udara Singapura, rata-rata 24 jam.</p>}
+        </>
+      )}
+    </section>
   );
 }

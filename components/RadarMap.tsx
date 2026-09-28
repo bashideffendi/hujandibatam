@@ -8,15 +8,17 @@ import {
   ImageOverlay,
   MapContainer,
   Pane,
+  Rectangle,
   TileLayer,
   Tooltip,
 } from "react-leaflet";
 import type { ConditionsResponse, ForecastResponse } from "@/lib/api-types";
 import { CCTV_HOST, MAPPED_CAMS, loadHls, type Cam } from "@/lib/cctv";
-import { isSmallLandscape, saveData } from "@/lib/client";
+import { isSmallLandscape, isWide, saveData } from "@/lib/client";
 import { readInitialState } from "@/lib/initial-state";
 import { PREF, writePref } from "@/lib/prefs";
 import {
+  BATAM_BOX,
   CARTO_SUBDOMAINS,
   DEFAULT_VIEW,
   LABEL_TILES,
@@ -25,19 +27,20 @@ import {
   PLACES,
   RADAR_BOUNDS,
   TILES,
-  VIEWS,
   VIEW_KEYS,
+  defaultViewFor,
   type Mode,
   type ViewKey,
 } from "@/lib/radar";
 import {
-  echoLine,
-  echoShort,
-  forecastLine,
+  cctvAnswer,
+  forecastStrip,
+  ofsAnswer,
+  ofsCaption,
   ofsView,
-  perairanLine,
+  rainAnswer,
+  rainCaption,
   radarView,
-  type Pill,
 } from "@/lib/status";
 import { useInstallPrompt, useNow, useOffline, useShare } from "@/hooks/useBrowser";
 import { useOfs } from "@/hooks/useOfs";
@@ -45,39 +48,51 @@ import { useRevisit } from "@/hooks/usePolling";
 import { useRadar } from "@/hooks/useRadar";
 import { useResource } from "@/hooks/useResource";
 import { useThemeMode } from "@/hooks/useThemeMode";
-import CctvLayer from "./CctvLayer";
+import CctvLayer, { type CamGroup, type CctvApi } from "./CctvLayer";
 import CctvPlayer from "./CctvPlayer";
 import IosInstallHint from "./IosInstallHint";
 import MapController, { type Padding } from "./MapController";
 import OfsField from "./OfsField";
 import Panel from "./Panel";
 import Topbar from "./Topbar";
+import CamDirectory from "./panel/CamDirectory";
+import CamList from "./panel/CamList";
 import CctvBlock from "./panel/CctvBlock";
 import Conditions from "./panel/Conditions";
-import { ModeSwitch, Transport, ViewSelector } from "./panel/Controls";
+import { Footer, Transport, ViewSelector } from "./panel/Controls";
 import Credit from "./panel/Credit";
+import { ForecastInfo, PerairanInfo, RadarNow } from "./panel/DetailSections";
+import ForecastStrip from "./panel/ForecastStrip";
 import { OfsLegend, RainMeta } from "./panel/Legends";
-import { InfoLine, StatusBlock } from "./panel/Status";
+import { Answer, WarnRow } from "./panel/Status";
 
 // ---------------------------------------------------------------------------
 // Orkestrator: merangkai hook data (hooks/*) dengan peta dan panel. Logika data ada di
-// hook, aturan tampilan ada di lib/status.ts, potongan UI ada di components/panel/*.
+// hook, aturan tampilan + salinan ada di lib/status.ts, potongan UI di components/panel/*.
 // ---------------------------------------------------------------------------
 
 // leaflet.vectorgrid (48 KB) cuma dibutuhkan mode OMBAK → jangan ikut chunk peta utama.
 const LandMask = dynamic(() => import("./LandMask"), { ssr: false });
 
-const TICK_MS = 30 * 1000; // label "X mnt lalu" dihitung ulang
+const TICK_MS = 30 * 1000; // label "X menit lalu" dihitung ulang
 const CONDITIONS_MS = 2 * 60 * 1000;
 const FORECAST_MS = 30 * 60 * 1000; // prakiraan BMKG 3-jaman; server menahan 15–30 menit
+/** "Perbesar Peta ke Sini" dari daftar kelompok: cukup dekat untuk memisahkan pin. */
+const GROUP_ZOOM = 16;
 
 const MODE_META: Record<Mode, { sub: string; panel: string }> = {
-  hujan: { sub: "Radar hujan · Batam & sekitarnya", panel: "Kontrol radar hujan" },
-  ombak: { sub: "Prakiraan ombak · Kepri", panel: "Kontrol prakiraan gelombang" },
-  cctv: { sub: "CCTV lalu lintas · Kota Batam", panel: "Daftar kamera" },
+  hujan: { sub: "Radar Hujan Batam dan Sekitarnya", panel: "Radar Hujan" },
+  ombak: { sub: "Prakiraan Ombak BMKG", panel: "Prakiraan Ombak" },
+  cctv: { sub: "Kamera Lalu Lintas Pemko Batam", panel: "Kamera Lalu Lintas" },
 };
 
-const defaultView = (mode: Mode): ViewKey => (mode === "cctv" ? "batam" : DEFAULT_VIEW);
+// Kotak "sekitar Batam" (tempat hujan dihitung) sebagai garis putus tipis di peta.
+const BOX_BOUNDS: [[number, number], [number, number]] = [
+  [BATAM_BOX.s, BATAM_BOX.w],
+  [BATAM_BOX.n, BATAM_BOX.e],
+];
+// className & interactive hanya dibaca Leaflet saat layer DIBUAT → prop langsung, bukan pathOptions.
+const BOX_OPTS = { className: "batam-box", weight: 1, dashArray: "4 4", fill: false, interactive: false } as const;
 
 /** Param URL yang mewakili tampilan sekarang (?mode=&view=&cam=), hanya yang bukan default. */
 function applyStateParams(p: URLSearchParams, mode: Mode, view: ViewKey, cam: Cam | null) {
@@ -85,7 +100,7 @@ function applyStateParams(p: URLSearchParams, mode: Mode, view: ViewKey, cam: Ca
   p.delete("view");
   p.delete("cam");
   if (mode !== "hujan") p.set("mode", mode);
-  if (view !== defaultView(mode)) p.set("view", view);
+  if (view !== defaultViewFor(mode)) p.set("view", view);
   if (cam) p.set("cam", cam.slug);
   return p;
 }
@@ -100,13 +115,18 @@ export default function RadarMap() {
   const [opacity, setOpacity] = useState(0.8);
   const [collapsed, setCollapsed] = useState(init.collapsed);
   const [detail, setDetail] = useState(init.detail);
+  // view peta terakhir di mode Hujan/Ombak — dipulihkan saat keluar dari CCTV
+  const mapView = useRef<ViewKey>(init.mode === "cctv" ? DEFAULT_VIEW : init.view);
 
-  // CCTV: kamera yang lagi diputar (null = nggak ada stream jalan), kamera yang terbukti
-  // mati di sesi ini, dan 3 kamera terakhir dibuka.
+  // CCTV: kamera yang lagi diputar (null = nggak ada stream jalan), kamera yang gagal
+  // diputar di sesi ini, 3 kamera terakhir dibuka, dan kelompok yang daftarnya terbuka.
   const [activeCam, setActiveCam] = useState<Cam | null>(init.cam);
   const [camAutoStart, setCamAutoStart] = useState(!init.cam); // dari link → tombol putar dulu
   const [deadCams, setDeadCams] = useState<Map<string, number | null>>(() => new Map());
   const [recentCams, setRecentCams] = useState<Cam[]>(init.recentCams);
+  const [camGroup, setCamGroup] = useState<CamGroup | null>(null);
+  const [camHint, setCamHint] = useState(init.camHint);
+  const cctvApi = useRef<CctvApi | null>(null);
 
   const panelRef = useRef<HTMLElement>(null);
   const topbarRef = useRef<HTMLElement>(null);
@@ -140,16 +160,21 @@ export default function RadarMap() {
     }
   });
 
-  // Padding fit dinamis: ukur tinggi panel & topbar asli biar wilayah selalu ke-frame penuh,
-  // nggak ketutup. Landscape HP: panel jadi side-sheet kanan → padding-nya di kanan.
+  // Padding fit dinamis: ukur panel & topbar asli biar wilayah selalu ke-frame penuh, nggak
+  // ketutup. HP landscape: panel side-sheet kanan. Layar lebar: panel di kiri bawah, jadi
+  // peta di-frame ke ruang kanannya.
   const getPadding = useCallback((): Padding => {
-    const panelH = panelRef.current?.offsetHeight ?? 220;
+    const panel = panelRef.current;
+    const panelH = panel?.offsetHeight ?? 220;
+    const panelW = panel?.offsetWidth ?? 320;
     const topH = topbarRef.current?.offsetHeight ?? 64;
-    if (isSmallLandscape()) {
-      const w = panelRef.current?.offsetWidth ?? 320;
-      return { paddingTopLeft: [14, topH + 8], paddingBottomRight: [w + 24, 14] };
-    }
-    return { paddingTopLeft: [14, topH + 8], paddingBottomRight: [14, Math.round(panelH) + 24] };
+    if (isSmallLandscape()) return { paddingTopLeft: [14, topH + 8], paddingBottomRight: [panelW + 24, 14] };
+    if (isWide()) return { paddingTopLeft: [panelW + 40, topH + 8], paddingBottomRight: [24, 24] };
+    // CCTV: lembar Daftar yang terbuka jangan ikut menyempitkan framing (peta kamera harus
+    // tetap dibuka di z11 dengan kelompok ≤9).
+    const det = panel?.querySelector<HTMLElement>("#panel-detail");
+    const detH = det && !det.hidden && panel?.dataset.mode === "cctv" ? det.offsetHeight + 12 : 0;
+    return { paddingTopLeft: [14, topH + 8], paddingBottomRight: [14, Math.round(panelH - detH) + 24] };
   }, []);
 
   // ---- efek samping ----
@@ -173,9 +198,12 @@ export default function RadarMap() {
     }
   }, [mode, view, activeCam]);
 
-  // Keluar dari mode CCTV = matikan stream yang lagi jalan.
+  // Keluar dari mode CCTV = matikan stream yang lagi jalan + tutup daftar kelompok.
   useEffect(() => {
-    if (mode !== "cctv") setActiveCam(null);
+    if (mode !== "cctv") {
+      setActiveCam(null);
+      setCamGroup(null);
+    }
   }, [mode]);
 
   // Masuk mode CCTV: pemanasan — preconnect ke host Pemko (tanpa payload) + chunk hls.js
@@ -209,9 +237,15 @@ export default function RadarMap() {
   const switchMode = (next: Mode) => {
     if (next === mode) return;
     setPlaying(false);
-    // view "Natuna" cuma valid di mode ombak; semua kamera ada di Pulau Batam.
-    if (next === "cctv") setView("batam");
-    else if (!VIEW_KEYS[next].includes(view)) setView("regional");
+    setCamGroup(null);
+    if (next === "cctv") {
+      mapView.current = view;
+      setView("kamera");
+    } else {
+      const base = mode === "cctv" ? mapView.current : view;
+      // "Natuna" cuma ada di Ombak → ke Hujan jadi "Luas"; view lain yang tak sah → bawaan.
+      setView(VIEW_KEYS[next].includes(base) ? base : base === "natuna" ? "regional" : DEFAULT_VIEW);
+    }
     setMode(next);
   };
 
@@ -226,6 +260,12 @@ export default function RadarMap() {
     else radar.scrub(v);
   };
 
+  const toNow = () => {
+    setPlaying(false);
+    if (mode === "ombak") ofs.toNow();
+    else radar.scrub(Math.max(0, radar.frames.length - 1));
+  };
+
   const closeCam = useCallback(() => {
     setActiveCam(null);
     setCamAutoStart(true);
@@ -234,6 +274,8 @@ export default function RadarMap() {
   const pickCam = useCallback((cam: Cam) => {
     setCamAutoStart(true);
     setActiveCam(cam);
+    setCamHint(false);
+    writePref(PREF.camHint, "1");
     setRecentCams((prev) => {
       const next = [cam, ...prev.filter((c) => c.slug !== cam.slug)].slice(0, 3);
       writePref(PREF.recentCams, JSON.stringify(next.map((c) => c.slug)));
@@ -249,19 +291,50 @@ export default function RadarMap() {
     });
   }, []);
 
+  const onCluster = useCallback((g: CamGroup | null) => {
+    setCamGroup(g);
+    if (g) {
+      setDetail(false);
+      setCollapsed(false);
+    }
+  }, []);
+
+  // Tutup daftar kelompok: fokus kembali ke gelembungnya (tunggu panel merender ulang).
+  const closeGroup = () => {
+    const key = camGroup?.key;
+    setCamGroup(null);
+    if (key) window.setTimeout(() => cctvApi.current?.focusGroup(key), 30);
+  };
+
+  const zoomGroup = () => {
+    const cams = camGroup?.cams ?? [];
+    setCamGroup(null);
+    // tunggu panel mengecil dulu supaya padding fit memakai tinggi panel yang baru; fokus
+    // pindah ke jawaban panel (tombol daftar sudah hilang)
+    window.setTimeout(() => {
+      cctvApi.current?.zoomToCams(cams, GROUP_ZOOM);
+      panelRef.current?.querySelector<HTMLElement>(".answer")?.focus();
+    }, 30);
+  };
+
+  const toggleDetail = () => {
+    if (!detail) setCamGroup(null);
+    setDetail(!detail);
+  };
+
   // ---- turunan tampilan ----
   const now = Math.max(tick, radar.loadedAt);
   const rv = radarView({
     frames: radar.frames,
     idx: radar.idx,
     status: radar.status,
-    stale: radar.stale,
     offline,
     now,
     broken: radar.broken,
   });
-  const echoText = echoLine(radar.echo, radar.frames, now, radar.status);
-  const fcText = forecastLine(forecast.data);
+  const rain = rainAnswer({ echo: radar.echo, frames: radar.frames, rv, status: radar.status, offline, now });
+  const rainCap = rainCaption(rv, now);
+  const strip = forecastStrip(forecast.data, forecast.error, now);
   const ov = ofsView({
     ofs: ofs.ofs,
     idx: ofs.idx,
@@ -270,42 +343,30 @@ export default function RadarMap() {
     maskOk: ofs.maskOk,
     offline,
   });
-  const pLine = perairanLine(ofs.perairan);
+  const ombak = ofsAnswer(ofs.perairan, ofs.perairanError, ov, offline);
+  const ombakCap = ofsCaption(ov);
+  const cctv = cctvAnswer(MAPPED_CAMS.length, deadCams.size);
 
-  const pill: Pill =
-    mode === "ombak"
-      ? { text: "Prakiraan", kind: "muted" }
-      : mode === "cctv"
-        ? activeCam
-          ? { text: "Langsung", kind: "live" }
-          : { text: "Siaga", kind: "muted" }
-        : rv.pill;
-
-  const liveText =
-    mode === "hujan"
-      ? [rv.pill.text, rv.date, echoText].filter(Boolean).join(". ")
-      : mode === "ombak"
-        ? [ov.state, ov.date, pLine?.warning].filter(Boolean).join(". ")
-        : "";
+  // Pembaca layar: hanya keadaan TERBARU (bukan tiap frame animasi/geseran).
+  const liveText = mode === "hujan" ? rain.live : mode === "ombak" ? ombak.live : "";
 
   const onShare = () => {
     const q = applyStateParams(new URLSearchParams(), mode, view, activeCam).toString();
     const url = `${window.location.origin}${window.location.pathname}${q ? `?${q}` : ""}`;
     const text =
       mode === "hujan"
-        ? `Radar hujan Batam${rv.current ? ` ${rv.current.time} WIB` : ""}${
-            radar.echo ? ` — ${echoShort(radar.echo)}` : ""
-          }`
+        ? rain.share
         : mode === "ombak"
-          ? `Prakiraan ombak perairan Batam${pLine ? ` — ${pLine.text}` : ""}`
+          ? ombak.share
           : activeCam
             ? `CCTV ${activeCam.name}, Batam`
-            : "CCTV lalu lintas Kota Batam";
+            : "Kamera Lalu Lintas Kota Batam";
     share({ title: "Hujan di Batam", text, url });
   };
 
   const modalOpen = !!activeCam;
   const current = rv.current;
+  const firstTime = radar.frames[0]?.time;
 
   return (
     <div ref={wrapperRef} data-theme={theme} className="app-root" style={{ position: "absolute", inset: 0 }}>
@@ -337,6 +398,8 @@ export default function RadarMap() {
               eventHandlers={{ error: () => radar.markBroken(current.url) }}
             />
           )}
+          {/* Garis putus "sekitar Batam" — hanya saat yang tampil citra terbaru yang segar */}
+          {mode === "hujan" && rv.ok && <Rectangle bounds={BOX_BOUNDS} {...BOX_OPTS} />}
           {/* Field gelombang OFS (double-buffer, nggak berkedip) di atas basemap */}
           {mode === "ombak" && ofs.ofs?.baserun && ov.valid && (
             <OfsField
@@ -367,7 +430,16 @@ export default function RadarMap() {
                 </Tooltip>
               </CircleMarker>
             ))}
-          {mode === "cctv" && <CctvLayer onPick={pickCam} dead={deadCams} getPadding={getPadding} />}
+          {mode === "cctv" && (
+            <CctvLayer
+              onPick={pickCam}
+              dead={deadCams}
+              getPadding={getPadding}
+              onCluster={onCluster}
+              selectedKey={camGroup?.key ?? null}
+              apiRef={cctvApi}
+            />
+          )}
           <MapController view={view} mode={mode} getPadding={getPadding} collapsed={collapsed} />
         </MapContainer>
       </div>
@@ -376,7 +448,6 @@ export default function RadarMap() {
 
       <Topbar
         sub={MODE_META[mode].sub}
-        pill={pill}
         theme={theme}
         onToggleTheme={toggleTheme}
         onShare={onShare}
@@ -391,114 +462,107 @@ export default function RadarMap() {
         mode={mode}
         collapsed={collapsed}
         detail={detail}
+        listing={mode === "cctv" && !!camGroup}
         inert={modalOpen}
         panelRef={panelRef}
         onCollapse={setCollapsed}
         liveText={liveText}
-        miniDot={
-          mode === "ombak"
-            ? "var(--text-dim)"
-            : mode === "cctv"
-              ? "var(--live-dot)"
-              : rv.ok
-                ? "var(--live-dot)"
-                : "#f59e0b"
-        }
         miniMain={
-          mode === "cctv" ? (
-            <>
-              {MAPPED_CAMS.length}
-              <span className="wib">KAMERA</span>
-            </>
-          ) : (
-            <>
-              {mode === "ombak" ? (ov.wib?.time ?? "—") : (current?.time ?? "—")}
-              <span className="wib">WIB</span>
-            </>
-          )
+          mode === "hujan" ? rain.mini : mode === "ombak" ? ombak.mini : `${MAPPED_CAMS.length} Kamera Lalu Lintas`
         }
-        miniSub={
-          mode === "ombak"
-            ? `Ombak · ${VIEWS[view].label}`
-            : mode === "cctv"
-              ? "CCTV · Kota Batam"
-              : `${VIEWS[view].label}${radar.echo?.near ? " · ada echo" : ""}`
-        }
+        miniDot={mode === "hujan" ? rain.dot : null}
       >
         {mode === "hujan" && (
-          <StatusBlock
-            value={current?.time ?? "—"}
-            unit="WIB"
-            date={rv.date}
-            onRetry={radar.status === "error" && !offline ? radar.load : undefined}
-            state={rv.state}
-            warn={!rv.ok}
-            dot={rv.ok ? "live" : "warn"}
-          />
+          <>
+            <Answer a={rain} onRetry={rain.retry && !offline ? radar.load : undefined} />
+            {forecast.data && <ForecastStrip place={forecast.data.place} strip={strip} />}
+            <Transport
+              playing={playing}
+              ready={rv.ready}
+              onTogglePlay={togglePlay}
+              playLabel={firstTime ? `Putar Radar sejak ${firstTime} WIB` : "Putar Radar"}
+              label="Waktu Peta Radar"
+              valueText={rv.sliderText}
+              max={Math.max(0, radar.frames.length - 1)}
+              value={radar.idx}
+              onScrub={scrub}
+              caption={rainCap}
+              onToNow={toNow}
+            />
+          </>
         )}
+
         {mode === "ombak" && (
-          <StatusBlock
-            value={ov.wib?.time ?? "—"}
-            unit="WIB"
-            date={ov.date}
-            onRetry={ov.canRetry ? () => ofs.load(true) : undefined}
-            state={ov.state}
-            warn={ov.error || ov.stale}
-            dot={ov.error ? "warn" : "dim"}
-          />
-        )}
-        {mode === "cctv" && (
-          <StatusBlock
-            value={String(MAPPED_CAMS.length)}
-            unit="KAMERA"
-            date={`Pantauan langsung Kota Batam${deadCams.size > 0 ? ` · ${deadCams.size} lagi mati` : ""}`}
-            state={activeCam ? "Langsung" : "Siaga"}
-            warn={false}
-            dot={activeCam ? "live" : "dim"}
-          />
+          <>
+            {ombak.warning && <WarnRow text={ombak.warning} />}
+            <Answer a={ombak} onRetry={ombak.retry ? () => ofs.load(true) : undefined} />
+            {ov.problem && <WarnRow text={ov.problem} />}
+            <Transport
+              playing={playing}
+              ready={ov.ready}
+              onTogglePlay={togglePlay}
+              playLabel={
+                ov.lastWib ? `Putar Prakiraan Ombak sampai ${ov.lastWib.day} ${ov.lastWib.time}` : "Putar Prakiraan Ombak"
+              }
+              label="Waktu Prakiraan Ombak"
+              valueText={ov.sliderText}
+              max={Math.max(0, ov.count - 1)}
+              value={ofs.idx}
+              onScrub={scrub}
+              caption={ombakCap}
+              onToNow={toNow}
+            />
+          </>
         )}
 
-        {mode === "hujan" && (echoText || fcText) && (
-          <div className="info-lines">
-            {echoText && <InfoLine on={!!radar.echo?.near}>{echoText}</InfoLine>}
-            {fcText && <InfoLine>{fcText}</InfoLine>}
+        {mode === "cctv" &&
+          (camGroup ? (
+            <CamList
+              key={camGroup.key}
+              members={camGroup.cams}
+              dead={deadCams}
+              onPick={pickCam}
+              onZoom={zoomGroup}
+              onClose={closeGroup}
+            />
+          ) : (
+            <>
+              <Answer a={{ ...cctv, tone: "normal", dot: null }} />
+              <CctvBlock recent={recentCams} dead={deadCams} onPick={pickCam} showHint={camHint} />
+            </>
+          ))}
+
+        <Footer
+          mode={mode}
+          onMode={switchMode}
+          detailLabel={mode === "cctv" ? "Daftar" : "Detail"}
+          detail={detail}
+          onToggleDetail={toggleDetail}
+        />
+
+        {(
+          <div id="panel-detail" className="panel-detail" hidden={!detail}>
+            {mode !== "cctv" && <ViewSelector keys={VIEW_KEYS[mode]} view={view} onChange={setView} />}
+            {mode === "hujan" && (
+              <>
+                {radar.frames.length > 0 && (
+                  <RadarNow echo={radar.echo} time={rv.latest?.time} fresh={rv.fresh} boxShown={rv.ok} />
+                )}
+                <RainMeta opacity={opacity} onOpacity={setOpacity} />
+                <ForecastInfo fc={forecast.data} strip={strip} />
+                <Conditions data={conditions.data} error={conditions.error} />
+              </>
+            )}
+            {mode === "ombak" && (
+              <>
+                <PerairanInfo p={ofs.perairan} error={ofs.perairanError} />
+                <OfsLegend />
+              </>
+            )}
+            {mode === "cctv" && <CamDirectory dead={deadCams} onPick={pickCam} />}
+            <Credit />
           </div>
         )}
-        {mode === "ombak" && pLine && ofs.perairan && (
-          <div className="info-lines">
-            <InfoLine warn={!!pLine.warning}>
-              <b>{ofs.perairan.name}</b> · {pLine.text}
-              {pLine.warning && <span className="info-warn"> · {pLine.warning}</span>}
-            </InfoLine>
-          </div>
-        )}
-
-        {mode === "cctv" && <CctvBlock recent={recentCams} dead={deadCams} onPick={pickCam} />}
-
-        <ModeSwitch mode={mode} onChange={switchMode} />
-
-        {mode !== "cctv" && (
-          <Transport
-            playing={playing}
-            ready={mode === "hujan" ? rv.ready : ov.ready}
-            onTogglePlay={togglePlay}
-            label={mode === "ombak" ? "Waktu prakiraan gelombang" : "Penggeser waktu citra hujan"}
-            valueText={mode === "ombak" ? ov.sliderText : rv.sliderText}
-            max={mode === "ombak" ? Math.max(0, ov.count - 1) : Math.max(0, radar.frames.length - 1)}
-            value={mode === "ombak" ? ofs.idx : radar.idx}
-            onScrub={scrub}
-            detail={detail}
-            onToggleDetail={() => setDetail((d) => !d)}
-          />
-        )}
-
-        <div id="panel-detail" className="panel-detail">
-          {mode !== "cctv" && <ViewSelector keys={VIEW_KEYS[mode]} view={view} onChange={setView} />}
-          {mode === "hujan" && <Conditions data={conditions.data} error={conditions.error} />}
-          {mode === "hujan" && <RainMeta opacity={opacity} onOpacity={setOpacity} />}
-          {mode === "ombak" && <OfsLegend />}
-          <Credit />
-        </div>
       </Panel>
 
       {activeCam && (

@@ -7,7 +7,7 @@ import dynamic from "next/dynamic";
 // siang hari nggak ada kedipan gelap → terang.
 const RadarMap = dynamic(() => import("./RadarMap"), {
   ssr: false,
-  loading: () => <div className="map-loading">Memuat peta…</div>,
+  loading: () => <div className="map-loading">Memuat Peta…</div>,
 });
 
 export default function MapShell() {

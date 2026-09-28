@@ -96,6 +96,13 @@ export function useOfs({
     load(true);
   }, [load]);
 
+  /** Tombol "Ke Sekarang": balik ke frame sekarang dan ikuti lagi saat data diperbarui. */
+  const toNow = useCallback(() => {
+    manualRef.current = false;
+    const o = ofsRef.current;
+    if (o) setIdx(Math.max(0, Math.min(o.frames.length - 1, o.nowIndex)));
+  }, []);
+
   /** Tekan Putar saat mentok di ujung → mulai lagi dari frame "sekarang". */
   const rewindIfAtEnd = useCallback(() => {
     const o = ofsRef.current;
@@ -109,9 +116,11 @@ export function useOfs({
     tilesDown,
     maskOk,
     perairan: perairan.data,
+    perairanError: perairan.error,
     load,
     reopen,
     scrub,
+    toNow,
     rewindIfAtEnd,
     setTilesDown,
     setMaskOk,

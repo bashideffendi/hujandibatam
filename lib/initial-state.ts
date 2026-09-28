@@ -3,9 +3,9 @@
 import { findCam, type Cam } from "./cctv";
 import { PREF, readPref } from "./prefs";
 import {
-  DEFAULT_VIEW,
   VIEWS,
   VIEW_KEYS,
+  defaultViewFor,
   timeBasedTheme,
   type Mode,
   type ThemeMode,
@@ -18,11 +18,13 @@ export type InitialState = {
   /** kamera dari link ?cam= (dibuka dengan tombol putar dulu, tidak auto-narik) */
   cam: Cam | null;
   collapsed: boolean;
-  /** bagian Detail panel terbuka (hanya berpengaruh di layar sempit) */
+  /** bagian Detail panel terbuka */
   detail: boolean;
   themeOverride: ThemeMode | null;
   theme: ThemeMode;
   recentCams: Cam[];
+  /** petunjuk "Ketuk Pin atau Angka…" masih perlu ditampilkan */
+  camHint: boolean;
 };
 
 function readRecentCams(): Cam[] {
@@ -60,7 +62,9 @@ export function readInitialState(): InitialState {
     if (s === "ombak" || s === "cctv") mode = s;
   }
 
-  let view: ViewKey = mode === "cctv" ? "batam" : DEFAULT_VIEW;
+  // View yang tidak sah untuk mode ini (mis. tautan lama ?mode=cctv&view=batam) jatuh ke
+  // bawaan mode — untuk CCTV itu kotak "kamera".
+  let view: ViewKey = defaultViewFor(mode);
   const sv = readPref(PREF.view);
   if (urlView && VIEW_KEYS[mode].includes(urlView)) view = urlView;
   else if (sv && sv in VIEWS && VIEW_KEYS[mode].includes(sv as ViewKey)) view = sv as ViewKey;
@@ -68,6 +72,7 @@ export function readInitialState(): InitialState {
   const st = readPref(PREF.theme);
   const themeOverride: ThemeMode | null = st === "light" || st === "dark" ? st : null;
 
+  const recentCams = readRecentCams();
   return {
     mode,
     view,
@@ -76,6 +81,8 @@ export function readInitialState(): InitialState {
     detail: readPref(PREF.detail) === "1",
     themeOverride,
     theme: themeOverride ?? timeBasedTheme(),
-    recentCams: readRecentCams(),
+    recentCams,
+    // pernah memilih kamera (tercatat di "Baru Kamu Buka") = sudah paham, petunjuk tak perlu
+    camHint: readPref(PREF.camHint) !== "1" && recentCams.length === 0,
   };
 }

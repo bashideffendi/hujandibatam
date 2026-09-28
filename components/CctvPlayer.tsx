@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { ErrorData } from "hls.js";
 import { CCTV_CREDIT, CCTV_MB_PER_MIN, checkCam, loadHls, streamUrl, type Cam, type CamCheck } from "@/lib/cctv";
+import { IconClose } from "./icons";
 
 // ---------------------------------------------------------------------------
 // Pemutar CCTV (HLS = HTTP Live Streaming) — SATU stream saja, hidup cuma selama panel kebuka.
@@ -51,11 +52,20 @@ const fmtLastSeen = (ms: number) =>
     minute: "2-digit",
   }).format(new Date(ms)) + " WIB";
 
-const DEAD_COPY: Record<Exclude<Verdict, "ok" | "diam" | "server">, string> = {
-  mati: "Kamera ini lagi mati — server berhenti menyiarkannya",
-  beku: "Kamera ini beku — gambarnya nggak diperbarui",
-  hilang: "Kamera ini nggak ada di server (mungkin dipindah/dihapus)",
-};
+const fmtTime = (ms: number) =>
+  new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit" }).format(new Date(ms));
+
+const wibDay = (ms: number) => new Date(ms + 7 * 3600 * 1000).toISOString().slice(0, 10);
+
+/** Judul pesan kamera mati/beku/hilang (Title Case; tanggal disebut kalau bukan hari ini). */
+function deadTitle(verdict: Verdict, lastSeen: number | null): string {
+  if (verdict === "beku") {
+    if (!lastSeen) return "Gambar Kamera Membeku";
+    return `Gambar Membeku sejak ${wibDay(lastSeen) === wibDay(Date.now()) ? fmtTime(lastSeen) : fmtLastSeen(lastSeen)}`;
+  }
+  if (verdict === "hilang") return "Kamera Sudah Tidak Ada";
+  return "Kamera Sedang Mati";
+}
 
 export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -71,6 +81,10 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<State>(autoStart ? "checking" : "idle");
   const [note, setNote] = useState<string | null>(null);
+  /** detail teknis kegagalan (dilipat di "Info Teknis") */
+  const [tech, setTech] = useState<string | null>(null);
+  /** saran tindakan yang selalu terlihat di bawah pesan gagal */
+  const [hint, setHint] = useState<string | null>(null);
   const [showRetry, setShowRetry] = useState(false);
   const [deadInfo, setDeadInfo] = useState<{ verdict: Verdict; lastSeen: number | null } | null>(null);
 
@@ -127,6 +141,8 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
       timers.push(t);
     };
     let hasPlayed = false;
+    // sudah divonis (gagal/mati) → watchdog & pemantau macet jangan menimpa pesannya
+    let settled = false;
     let firstFrag = false;
     let netRetries = 0;
     let mediaRecovered = false;
@@ -139,6 +155,8 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
 
     setState("checking");
     setNote(null);
+    setTech(null);
+    setHint(null);
     setShowRetry(false);
     setDeadInfo(null);
 
@@ -148,14 +166,18 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
       video.play().catch(() => {
         if (!cancelled && !hasPlayed) setState("blocked");
       });
-    const fail = (msg: string) => {
+    const fail = (msg: string, techNote?: string, hintText?: string) => {
       if (cancelled) return;
+      settled = true;
       setNote(msg);
+      setTech(techNote ?? null);
+      setHint(hintText ?? null);
       setShowRetry(true);
       setState("error");
     };
     const dead = (verdict: Verdict, lastSeen: number | null) => {
       if (cancelled) return;
+      settled = true;
       setDeadInfo({ verdict, lastSeen });
       setState("dead");
       onDeadRef.current?.(cam.slug, lastSeen);
@@ -185,9 +207,9 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
     const onVideoError = () => {
       if (hls || cancelled) return; // jalur hls.js punya handler sendiri
       const code = video.error?.code;
-      if (code === 4) dead("mati", null);
-      else if (code === 3) fail("Siaran kamera ini nggak bisa diputar di perangkat ini.");
-      else fail(hasPlayed ? "Koneksi ke kamera putus." : "Nggak bisa nyambung ke kamera.");
+      // code 4 = sumber tak didukung browser — BUKAN bukti kamera mati (itu sudah dicek checkCam)
+      if (code === 4 || code === 3) fail("Browser Ini Belum Bisa Memutar Kamera Ini");
+      else fail(hasPlayed ? "Koneksi ke Kamera Terputus" : "Belum Bisa Tersambung ke Kamera");
     };
     video.addEventListener("playing", onPlaying);
     video.addEventListener("pause", onPause);
@@ -197,20 +219,20 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
 
     // Watchdog: 10 detik tanpa potongan pertama → kabari, jangan diam. Loading tetap jalan.
     later(() => {
-      if (!firstFrag) {
-        setNote("Jaringannya lagi berat, masih dicoba…");
+      if (!firstFrag && !settled) {
+        setNote("Jaringan Sedang Berat, Masih Dicoba…");
         setShowRetry(true);
       }
     }, 10000);
-    // Nyendat kelamaan setelah pernah jalan → jujur bilang macet.
+    // Tersendat kelamaan setelah pernah jalan → jujur bilang macet.
     let stallTimer: number | null = null;
     const armStall = () => {
       if (stallTimer !== null) return;
       stallTimer = window.setTimeout(() => {
         stallTimer = null;
-        if (cancelled || video.paused) return;
+        if (cancelled || settled || video.paused) return;
         if (video.readyState < 3) {
-          setNote("Siaran macet — kamera berhenti ngirim gambar atau sinyal putus.");
+          setNote("Siaran macet: kamera berhenti mengirim gambar atau sinyal putus.");
           setShowRetry(true);
         }
       }, 20000);
@@ -262,7 +284,7 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
         return; // NOL byte video
       }
       if (v.verdict === "server") {
-        fail("Server kameranya lagi gangguan.");
+        fail("Server Kamera Sedang Gangguan");
         return;
       }
       // "diam" (timeout/offline) TIDAK memvonis kamera — tetap coba.
@@ -276,7 +298,7 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
       const appleNative = nativeOk && !("MediaSource" in window);
       if (appleNative || !HlsCtor || !HlsCtor.isSupported()) {
         if (!nativeOk) {
-          fail("Browser ini nggak bisa memutar siaran HLS.");
+          fail("Browser Ini Belum Bisa Memutar Kamera Ini", "Browser tidak mendukung siaran HLS.");
           return;
         }
         video.addEventListener(
@@ -347,18 +369,20 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
             setState("buffering");
             armStall();
           }
-          if (nonFatal.length >= 3) setNote("Sinyal kamera terputus-putus.");
+          if (nonFatal.length >= 3) setNote("Sinyal Kamera Putus-Putus");
           return;
         }
         const code = data.response?.code ?? 0;
         if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
           if (code >= 400 && code < 500) {
-            // 4xx nggak di-retry hls.js — dan memang jangan: kameranya yang nggak ada.
-            dead(code === 404 ? "hilang" : "mati", null);
+            // 4xx nggak di-retry hls.js — dan memang jangan. Hanya 404 yang pasti "tidak ada";
+            // 4xx lain (403 dsb.) belum tentu kamera mati.
+            if (code === 404) dead("hilang", null);
+            else fail("Kamera Belum Bisa Diakses");
             return;
           }
           if (code >= 500) {
-            fail("Server kameranya lagi gangguan.");
+            fail("Server Kamera Sedang Gangguan");
             return;
           }
           const timeout =
@@ -366,7 +390,7 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
             data.details === Hls.ErrorDetails.MANIFEST_LOAD_TIMEOUT ||
             data.details === Hls.ErrorDetails.LEVEL_LOAD_TIMEOUT;
           if (timeout && !firstFrag) {
-            fail("Koneksimu lagi belum kuat buat siaran video ini (butuh ≥1,2 Mbit/s).");
+            fail("Sinyalmu Kurang Kuat untuk Video Ini", "Siaran ini butuh koneksi minimal 1,2 Mbit/s.");
             return;
           }
           if (netRetries < 2) {
@@ -374,7 +398,7 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
             const delay = netRetries === 0 ? 1000 : 3000;
             netRetries++;
             setState(hasPlayed ? "buffering" : "connecting");
-            setNote("Koneksi kedip — nyambung ulang…");
+            setNote("Koneksi Sempat Putus, Menyambung Ulang…");
             const go = () => {
               if (cancelled) return;
               h.startLoad(-1);
@@ -384,7 +408,7 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
             else later(go, delay);
             return;
           }
-          fail(hasPlayed ? "Koneksi ke kamera putus." : "Nggak bisa nyambung ke kamera.");
+          fail(hasPlayed ? "Koneksi ke Kamera Terputus" : "Belum Bisa Tersambung ke Kamera");
           return;
         }
         // Codec tidak didukung browser (sebagian kamera menyiarkan H.265): recover percuma,
@@ -394,7 +418,11 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
           data.details === Hls.ErrorDetails.BUFFER_ADD_CODEC_ERROR ||
           data.details === Hls.ErrorDetails.BUFFER_INCOMPATIBLE_CODECS_ERROR;
         if (codecIssue) {
-          fail("Kamera ini pakai format video H.265 yang belum didukung browser ini. Coba browser lain atau kamera lain.");
+          fail(
+            "Format Video Belum Didukung Browser Ini",
+            "Kamera ini menyiarkan H.265 (HEVC). Dukungannya bergantung pada browser dan perangkat.",
+            "Coba browser lain atau kamera lain.",
+          );
           return;
         }
         if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
@@ -404,10 +432,10 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
             tryPlay();
             return;
           }
-          fail("Siaran kamera ini nggak bisa diputar di perangkat ini.");
+          fail("Browser Ini Belum Bisa Memutar Kamera Ini");
           return;
         }
-        fail("Siaran nggak bisa diputar.");
+        fail("Siaran Belum Bisa Diputar");
       });
       // Urutan: loadSource dulu, baru attachMedia.
       h.loadSource(url);
@@ -448,7 +476,7 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
     state === "playing"
       ? { text: "Langsung", cls: "is-live" }
       : state === "buffering"
-        ? { text: "Nyendat", cls: "is-muted" }
+        ? { text: "Tersendat", cls: "is-muted" }
         : state === "paused"
           ? { text: "Dijeda", cls: "is-muted" }
           : state === "dead"
@@ -457,23 +485,23 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
               ? { text: "Gangguan", cls: "is-off" }
               : state === "idle" || state === "blocked"
                 ? { text: "Siap", cls: "is-muted" }
-                : { text: "Menyambung", cls: "is-muted" };
+                : { text: "Menyambung…", cls: "is-muted" };
 
   const statusText =
     state === "checking"
-      ? "Ngecek kamera…"
+      ? "Mengecek Kamera…"
       : state === "connecting"
         ? "Menyambung…"
         : state === "fetching"
-          ? "Mengambil siaran… potongan pertama ±3 MB"
+          ? "Mengambil Siaran…"
           : state === "playing"
-            ? `Siaran ${cam.name} jalan`
+            ? `Siaran ${cam.name} Tayang`
             : state === "buffering"
-              ? "Nyendat, nunggu data…"
+              ? "Tersendat, Menunggu Data…"
               : state === "dead" && deadInfo
-                ? DEAD_COPY[deadInfo.verdict as keyof typeof DEAD_COPY] ?? "Kamera lagi mati"
+                ? deadTitle(deadInfo.verdict, deadInfo.lastSeen)
                 : state === "error"
-                  ? (note ?? "Kamera lagi nggak bisa diakses")
+                  ? (note ?? "Kamera Belum Bisa Diakses")
                   : "";
 
   const showLoading = state === "checking" || state === "connecting" || state === "fetching";
@@ -495,13 +523,11 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
             </h2>
             <div className="cctv-sub">
               {cam.area}
-              {cam.approx && " · posisi perkiraan"}
+              {cam.approx && " · Posisi Perkiraan"}
             </div>
           </div>
-          <button ref={closeRef} className="cctv-close" onClick={onClose} aria-label="Tutup kamera">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden>
-              <path d="M6 6l12 12M18 6L6 18" />
-            </svg>
+          <button ref={closeRef} className="cctv-close" onClick={onClose} aria-label="Tutup Kamera">
+            <IconClose />
           </button>
         </div>
 
@@ -514,7 +540,7 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
               {note && <div className="cctv-note">{note}</div>}
               {showRetry && (
                 <button className="cctv-retry" onClick={retry}>
-                  Coba lagi
+                  Coba Lagi
                 </button>
               )}
             </div>
@@ -522,7 +548,7 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
 
           {state === "buffering" && (
             <div className="cctv-chip" aria-hidden>
-              Nyendat…
+              Tersendat…
             </div>
           )}
 
@@ -533,34 +559,43 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
                 if (!started) setStarted(true);
                 else videoRef.current?.play().catch(() => setState("blocked"));
               }}
-              aria-label="Putar kamera"
+              aria-label="Putar Kamera"
             >
               <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden>
                 <path d="M8 5v14l11-7z" />
               </svg>
-              Ketuk untuk memutar
-              {!started && <span className="cctv-note">Siaran video ≈{CCTV_MB_PER_MIN} MB per menit</span>}
+              Ketuk untuk Memutar
+              {!started && <span className="cctv-note">Siaran Video Sekitar {CCTV_MB_PER_MIN} MB per Menit</span>}
             </button>
           )}
 
           {state === "dead" && deadInfo && (
             <div className="cctv-overlay">
-              <div className="cctv-stage-text">{DEAD_COPY[deadInfo.verdict as keyof typeof DEAD_COPY]}</div>
+              <div className="cctv-stage-text">{deadTitle(deadInfo.verdict, deadInfo.lastSeen)}</div>
               <div className="cctv-note">
-                {deadInfo.lastSeen ? `Terakhir kirim gambar ${fmtLastSeen(deadInfo.lastSeen)}. ` : ""}
+                {deadInfo.verdict !== "beku" && deadInfo.lastSeen
+                  ? `Terakhir mengirim gambar ${fmtLastSeen(deadInfo.lastSeen)}. `
+                  : ""}
                 Coba kamera lain di sekitar situ.
               </div>
               <button className="cctv-retry" onClick={retry}>
-                Cek lagi
+                Cek Lagi
               </button>
             </div>
           )}
 
           {state === "error" && (
             <div className="cctv-overlay">
-              <div className="cctv-stage-text">{note ?? "Kamera lagi nggak bisa diakses"}</div>
+              <div className="cctv-stage-text">{note ?? "Kamera Belum Bisa Diakses"}</div>
+              {hint && <div className="cctv-note">{hint}</div>}
+              {tech && (
+                <details className="cctv-tech">
+                  <summary>Info Teknis</summary>
+                  {tech}
+                </details>
+              )}
               <button className="cctv-retry" onClick={retry}>
-                Coba lagi
+                Coba Lagi
               </button>
             </div>
           )}
@@ -571,7 +606,7 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
             <span className="dot" /> {badge.text}
           </span>
           <span className="cctv-credit">
-            {CCTV_CREDIT} · ≈{CCTV_MB_PER_MIN} MB/menit
+            {CCTV_CREDIT} · Sekitar {CCTV_MB_PER_MIN} MB per Menit
           </span>
         </div>
         <div className="sr-only" role="status" aria-live="polite">

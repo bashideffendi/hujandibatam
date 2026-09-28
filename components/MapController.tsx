@@ -31,8 +31,10 @@ export default function MapController({
   const map = useMap();
   const mounted = useRef(false);
   const viewRef = useRef(view);
+  const modeRef = useRef(mode);
   useEffect(() => {
     viewRef.current = view;
+    modeRef.current = mode;
   });
 
   const fit = useCallback(
@@ -67,13 +69,16 @@ export default function MapController({
     fit(view, true);
   }, [mode, view, map, fit]);
 
-  // panel ditutup/dibuka -> tinggi panel berubah -> re-frame halus pakai ruang baru
+  // panel ditutup/dibuka -> tinggi panel berubah -> re-frame halus pakai ruang baru.
+  // KECUALI di CCTV: di sana pengguna menjelajah dengan zoom sendiri, dan membuka panel
+  // karena gelembung diketuk tidak boleh menerbangkan peta balik ke kotak kamera.
   const firstCollapse = useRef(true);
   useEffect(() => {
     if (firstCollapse.current) {
       firstCollapse.current = false;
       return;
     }
+    if (modeRef.current === "cctv") return;
     fit(viewRef.current, true, 0.4);
   }, [collapsed, fit]);
 

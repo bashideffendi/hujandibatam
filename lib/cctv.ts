@@ -41,6 +41,7 @@ import { CCTV_HOST } from "./sources";
 export type Cam = {
   slug: string;
   name: string;
+  /** kecamatan (dipakai sebagai kelompok di Daftar) */
   area: string;
   lat?: number;
   lng?: number;
@@ -119,8 +120,8 @@ export const CAMS: Cam[] = [
   { slug: "southgate", name: "Gerbang Selatan Engku Putri", area: "Batam Kota", lat: 1.126500, lng: 104.054085, approx: true },
   { slug: "gerutara", name: "Gerbang Utara Engku Putri", area: "Batam Kota", lat: 1.129500, lng: 104.054085, approx: true },
   { slug: "madanipancuran", name: "Bundaran Madani Pancuran", area: "Batam Kota", lat: 1.133783, lng: 104.042511 },
-  { slug: "madaniseipanas", name: "Bundaran Madani arah Sei Panas", area: "Batam Kota", lat: 1.133783, lng: 104.042511, approx: true },
-  { slug: "simpkuda1", name: "Simpang Kuda", area: "Sungai Panas", lat: 1.136283, lng: 104.027114 },
+  { slug: "madaniseipanas", name: "Bundaran Madani Arah Sei Panas", area: "Batam Kota", lat: 1.133783, lng: 104.042511, approx: true },
+  { slug: "simpkuda1", name: "Simpang Kuda", area: "Batam Kota", lat: 1.136283, lng: 104.027114 },
   { slug: "sukajadi2", name: "Depan Perumahan Sukajadi", area: "Batam Kota", lat: 1.104559, lng: 104.026126, approx: true },
   { slug: "casablanca2", name: "Simpang Casablanca", area: "Batam Kota", lat: 1.121195, lng: 104.016326, approx: true },
 
@@ -135,9 +136,9 @@ export const CAMS: Cam[] = [
   { slug: "matakucing1", name: "Mata Kucing", area: "Sekupang", lat: 1.085136, lng: 103.971603, approx: true },
   // Titik = centroid perumahan Delta Villa (reverse-geocode), ±240 m dari jalan yang
   // difilmkan (Jl. Pangeran Diponegoro) → ditandai perkiraan (audit 2026-09).
-  { slug: "delta2", name: "Depan Delta Villa arah Mata Kucing", area: "Sekupang", lat: 1.102452, lng: 103.960683, approx: true },
-  { slug: "southlink1", name: "Tanjakan Southlink", area: "Tiban", lat: 1.113720, lng: 103.996030, approx: true },
-  { slug: "ptzsouthlink", name: "Tanjakan Southlink (PTZ)", area: "Tiban", lat: 1.114200, lng: 103.996030, approx: true },
+  { slug: "delta2", name: "Depan Delta Villa Arah Mata Kucing", area: "Sekupang", lat: 1.102452, lng: 103.960683, approx: true },
+  { slug: "southlink1", name: "Tanjakan Southlink", area: "Sekupang", lat: 1.113720, lng: 103.996030, approx: true },
+  { slug: "ptzsouthlink", name: "Tanjakan Southlink (PTZ)", area: "Sekupang", lat: 1.114200, lng: 103.996030, approx: true },
 
   // — Batu Aji / Sagulung —
   { slug: "batuaji", name: "Depan SP Plaza Batu Aji", area: "Batu Aji", lat: 1.042239, lng: 103.982872 },
@@ -153,18 +154,18 @@ export const CAMS: Cam[] = [
   // Ketiganya nggak ketemu di Nominatim/Overpass, jadi diverifikasi di lapangan-peta.
   { slug: "engkuhamidah1", name: "Engku Hamidah", area: "Batam Kota", lat: 1.125114, lng: 104.026894 },
   { slug: "danganom1", name: "Taman Dang Anom", area: "Batam Kota", lat: 1.121378, lng: 104.019885 },
-  { slug: "danganom3", name: "Taman Dang Anom arah Jalan", area: "Batam Kota", lat: 1.121378, lng: 104.019885 },
+  { slug: "danganom3", name: "Taman Dang Anom Arah Jalan", area: "Batam Kota", lat: 1.121378, lng: 104.019885 },
   // CATATAN: slug bilang "batuaji" tapi lokasinya BUKAN Kec. Batu Aji. "damkar" =
   // pemadam kebakaran, dan kantornya ada di Duriangkang, Sukajadi, Kec. Batam Kota
-  // (persis di sebelah Stadion Temenggung). "arah Batu Aji" di nama = arah hadap.
-  { slug: "batuajidamkar1", name: "Depan Stadion Temenggung", area: "Sukajadi", lat: 1.088491, lng: 104.033566 },
-  { slug: "batuajidamkar3", name: "Depan Stadion Temenggung arah Batu Aji", area: "Sukajadi", lat: 1.088491, lng: 104.033566 },
+  // (persis di sebelah Stadion Temenggung). "Arah Batu Aji" di nama = arah hadap.
+  { slug: "batuajidamkar1", name: "Depan Stadion Temenggung", area: "Batam Kota", lat: 1.088491, lng: 104.033566 },
+  { slug: "batuajidamkar3", name: "Depan Stadion Temenggung Arah Batu Aji", area: "Batam Kota", lat: 1.088491, lng: 104.033566 },
 ];
 
 /** Kamera yang punya koordinat → dipasang sebagai pin di peta. */
 export const MAPPED_CAMS = CAMS.filter((c) => c.lat != null && c.lng != null);
 
-/** Kamera tanpa koordinat → daftar chip di panel, tetap bisa dibuka. */
+/** Kamera tanpa koordinat → bagian "Belum Ada di Peta" di Daftar, tetap bisa dibuka. */
 export const UNMAPPED_CAMS = CAMS.filter((c) => c.lat == null || c.lng == null);
 
 export const findCam = (slug: string | null | undefined) =>
