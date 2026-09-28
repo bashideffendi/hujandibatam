@@ -6,11 +6,22 @@ import { perairanDetail, rainDetail, type ForecastStripView } from "@/lib/status
  * Detail HUJAN: apa itu "sekitar Batam", seberapa luas hujannya, dan batas kejujuran radar.
  * Judul hanya "Sekarang" kalau citra terbaru segar; kalimat garis putus hanya saat garisnya tampil.
  */
-export function RadarNow({ echo, time, fresh, boxShown }: { echo: EchoSummary | null; time?: string; fresh: boolean; boxShown: boolean }) {
+export function RadarNow({
+  echo,
+  when,
+  fresh,
+  boxShown,
+}: {
+  echo: EchoSummary | null;
+  /** waktu citra terbaru ("10.15 WIB" / "Sabtu 10.15") */
+  when: string;
+  fresh: boolean;
+  boxShown: boolean;
+}) {
   const d = rainDetail(echo);
   return (
     <section className="d-sec">
-      <h3 className="d-title">{fresh || !time ? "Radar Sekarang" : `Radar Terakhir, ${time} WIB`}</h3>
+      <h3 className="d-title">{fresh || !when ? "Radar Sekarang" : `Radar Terakhir, ${when}`}</h3>
       <div className="d-text">
         <p>
           {boxShown

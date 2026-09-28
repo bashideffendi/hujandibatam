@@ -111,6 +111,12 @@ const lalu = (min: number) => (min < 1 ? "Baru Saja" : `${durasi(min)} Lalu`);
 
 /** Tanggal WIB (YYYY-MM-DD) dari instant ms. */
 const wibDay = (ms: number) => new Date(ms + 7 * 3600 * 1000).toISOString().slice(0, 10);
+/** "10.15 WIB", atau "Sabtu 10.15" kalau citranya bukan dari hari ini. */
+function whenLabel(f: Frame, now: number): string {
+  const inst = tsToInstant(f.ts);
+  const otherDay = inst !== null && wibDay(inst) !== wibDay(now);
+  return otherDay ? `${f.date.split(",")[0]} ${f.time}` : `${f.time} WIB`;
+}
 
 // ---- HUJAN ----------------------------------------------------------------
 export type RadarView = {
@@ -128,6 +134,8 @@ export type RadarView = {
   ok: boolean;
   /** umur frame pertama (menit) — ujung kiri penggeser */
   spanMin: number | null;
+  /** waktu citra terbaru untuk keadaan tidak segar: "10.15 WIB", atau "Sabtu 10.15" kalau bukan hari ini */
+  latestWhen: string;
   sliderText: string;
 };
 
@@ -159,6 +167,7 @@ export function radarView(a: {
     fresh,
     ok: isLatest && fresh && !(!!current && broken.has(current.url)),
     spanMin: frames.length ? ageMinutesOf(frames[0].ts, now) : null,
+    latestWhen: latest ? whenLabel(latest, now) : "",
     sliderText: current ? `${current.time} WIB, ${lalu(currentAge ?? 0)}` : "",
   };
 }
@@ -227,9 +236,7 @@ export function rainAnswer(a: {
 
   const cond = rainCond(echo);
   const t = latest.time;
-  const inst = tsToInstant(latest.ts);
-  const otherDay = inst !== null && wibDay(inst) !== wibDay(now);
-  const lastLabel = otherDay ? `Terakhir ${latest.date.split(",")[0]} ${t}` : `Terakhir ${t} WIB`;
+  const lastLabel = `Terakhir ${whenLabel(latest, now)}`;
   const share = cond.known ? `Radar ${t} WIB: ${condSentence(cond)}` : `Radar Hujan Batam ${t} WIB`;
   const mini = (h: string) => `${h} · ${t}`;
 
@@ -295,7 +302,7 @@ export function rainCaption(rv: RadarView, now: number): Caption {
   }
   return {
     left: rv.spanMin !== null ? lalu(rv.spanMin) : "",
-    right: rv.fresh ? "Sekarang" : `${latest.time} WIB`,
+    right: rv.fresh ? "Sekarang" : rv.latestWhen,
     warn: false,
     toNow: false,
   };

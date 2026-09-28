@@ -352,6 +352,9 @@ path.batam-box {
   z-index: 500;
   width: min(440px, calc(100% - 20px));
   max-height: 70dvh; /* Detail/Daftar terbuka: lembar menyusut & bergulir sendiri */
+  /* kalau isi di luar Detail tetap lebih tinggi (font besar), panel yang bergulir — footer tak meluber */
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   background: var(--panel-bg);
@@ -1103,8 +1106,11 @@ input[type="range"].rng:disabled {
 }
 
 /* ===== CCTV: pin kamera di peta ===== */
-/* Hit-box 44×44 (target sentuh), visual lebih kecil di tengah. Tanpa kotak putih default Leaflet. */
-.cam-hit {
+/* Hit-box 44×44 (target sentuh), visual lebih kecil di tengah. Tanpa kotak putih default Leaflet.
+   Spesifisitas dinaikkan: leaflet.css (dimuat sesudah file ini) memasang
+   `.leaflet-marker-icon{display:block}` → tanpa ini pin duduk di pojok kiri-atas kotak,
+   meleset 10 px dari titik aslinya (dan garis rambut kipas ikut meleset). */
+.leaflet-marker-icon.cam-hit {
   background: transparent;
   border: 0;
   display: grid;

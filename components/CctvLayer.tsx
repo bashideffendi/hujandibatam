@@ -159,9 +159,11 @@ type Props = {
   onCluster: (g: CamGroup | null) => void;
   selectedKey: string | null;
   apiRef: MutableRefObject<CctvApi | null>;
+  /** fokuskan jawaban panel (marker yang difokus hilang sesudah zoom) */
+  focusPanel: () => void;
 };
 
-export default function CctvLayer({ onPick, dead, getPadding, onCluster, selectedKey, apiRef }: Props) {
+export default function CctvLayer({ onPick, dead, getPadding, onCluster, selectedKey, apiRef, focusPanel }: Props) {
   const map = useMap();
   const [zoom, setZoom] = useState(() => map.getZoom());
   const markers = useRef(new Map<string, L.Marker>());
@@ -253,11 +255,13 @@ export default function CctvLayer({ onPick, dead, getPadding, onCluster, selecte
     [groups, dead, selectedKey],
   );
 
-  // Gelembung ≤9 → daftar di panel; lebih dari itu → perbesar peta.
-  const openGroup = (g: Group) => {
+  // Gelembung ≤9 → daftar di panel; lebih dari itu → perbesar peta. Lewat keyboard, fokus
+  // dipindah ke panel sesudah zoom (gelembung yang difokus dilepas saat pecah).
+  const openGroup = (g: Group, viaKey = false) => {
     const cams = g.members.map((m) => m.cam);
     if (cams.length > LIST_MAX) {
       onCluster(null);
+      if (viaKey) map.once("moveend", () => window.setTimeout(focusPanel, 30));
       apiRef.current?.zoomToCams(cams, BIG_GROUP_ZOOM);
     } else {
       onCluster({ key: g.key, cams });
@@ -302,7 +306,7 @@ export default function CctvLayer({ onPick, dead, getPadding, onCluster, selecte
             position={it.position}
             icon={it.icon}
             zIndexOffset={it.key === selectedKey ? 1000 : 0}
-            eventHandlers={{ click: () => openGroup(it.group), keydown: onKey(() => openGroup(it.group)) }}
+            eventHandlers={{ click: () => openGroup(it.group), keydown: onKey(() => openGroup(it.group, true)) }}
             keyboard
           />
         ),

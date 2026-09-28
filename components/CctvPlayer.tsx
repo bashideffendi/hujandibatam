@@ -164,11 +164,14 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
     // putar. Setelah pernah jalan, penolakan berikutnya juga bukan error.
     const tryPlay = () =>
       video.play().catch(() => {
-        if (!cancelled && !hasPlayed) setState("blocked");
+        // play() yang ditolak SESUDAH vonis gagal (sumber error) bukan soal autoplay
+        if (!cancelled && !hasPlayed && !settled) setState("blocked");
       });
     const fail = (msg: string, techNote?: string, hintText?: string) => {
       if (cancelled) return;
       settled = true;
+      // hls.js hanya stopLoad() pada galat fatal; sisa buffer jangan diputar di balik pesan
+      if (hasPlayed) video.pause();
       setNote(msg);
       setTech(techNote ?? null);
       setHint(hintText ?? null);
@@ -178,6 +181,7 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
     const dead = (verdict: Verdict, lastSeen: number | null) => {
       if (cancelled) return;
       settled = true;
+      if (hasPlayed) video.pause();
       setDeadInfo({ verdict, lastSeen });
       setState("dead");
       onDeadRef.current?.(cam.slug, lastSeen);
@@ -185,6 +189,7 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
 
     // --- event <video> ---
     const onPlaying = () => {
+      if (settled) return; // sisa buffer sesudah vonis gagal tidak menghapus pesannya
       hasPlayed = true;
       firstFrag = true;
       netRetries = 0;
@@ -199,16 +204,21 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
       if (hasPlayed && !video.ended) setState((s) => (s === "playing" || s === "buffering" ? "paused" : s));
     };
     const onWaiting = () => {
-      if (!hasPlayed) return;
+      if (!hasPlayed || settled) return;
       later(() => {
-        if (!video.paused && !video.ended && video.readyState < 3) setState("buffering");
+        if (!settled && !video.paused && !video.ended && video.readyState < 3) setState("buffering");
       }, 1500);
     };
     const onVideoError = () => {
       if (hls || cancelled) return; // jalur hls.js punya handler sendiri
       const code = video.error?.code;
-      // code 4 = sumber tak didukung browser — BUKAN bukti kamera mati (itu sudah dicek checkCam)
-      if (code === 4 || code === 3) fail("Browser Ini Belum Bisa Memutar Kamera Ini");
+      // Kode 4 SEBELUM metadata = gagal mengambil sumber (jaringan/403/5xx) — Blink & WebKit
+      // memetakannya ke MEDIA_ERR_SRC_NOT_SUPPORTED. Format yang benar-benar tak didukung sudah
+      // ditangkap canPlayType. Jadi kode 4 dini = gagal tersambung, bukan salah browser.
+      const beforeMeta = video.readyState < 1 || !firstFrag;
+      if (code === 4 && beforeMeta)
+        fail("Belum Bisa Tersambung ke Kamera", "Galat media kode 4 sebelum metadata termuat.");
+      else if (code === 3 || code === 4) fail("Browser Ini Belum Bisa Memutar Kamera Ini");
       else fail(hasPlayed ? "Koneksi ke Kamera Terputus" : "Belum Bisa Tersambung ke Kamera");
     };
     video.addEventListener("playing", onPlaying);
@@ -365,7 +375,7 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
           const now = Date.now();
           nonFatal = nonFatal.filter((t) => now - t < 30000);
           nonFatal.push(now);
-          if (data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR && hasPlayed) {
+          if (data.details === Hls.ErrorDetails.BUFFER_STALLED_ERROR && hasPlayed && !settled) {
             setState("buffering");
             armStall();
           }
@@ -557,6 +567,8 @@ export default function CctvPlayer({ cam, onClose, onDead, autoStart = true }: P
               className="cctv-overlay cctv-play"
               onClick={() => {
                 if (!started) setStarted(true);
+                // elemen sudah galat → putar ulang dari awal, bukan play() yang pasti ditolak
+                else if (videoRef.current?.error) retry();
                 else videoRef.current?.play().catch(() => setState("blocked"));
               }}
               aria-label="Putar Kamera"

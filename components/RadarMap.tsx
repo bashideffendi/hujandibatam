@@ -163,7 +163,10 @@ export default function RadarMap() {
   // Padding fit dinamis: ukur panel & topbar asli biar wilayah selalu ke-frame penuh, nggak
   // ketutup. HP landscape: panel side-sheet kanan. Layar lebar: panel di kiri bawah, jadi
   // peta di-frame ke ruang kanannya.
-  const getPadding = useCallback((): Padding => {
+  // ignoreDetail: framing VIEW (MapController) di mode CCTV mengabaikan lembar Daftar yang
+  // terbuka supaya peta kamera tetap dibuka di z11; zoom ke kamera & panInside memakai
+  // padding penuh (kamera jangan diterbangkan ke bawah lembar).
+  const getPadding = useCallback((ignoreDetail = false): Padding => {
     const panel = panelRef.current;
     const panelH = panel?.offsetHeight ?? 220;
     const panelW = panel?.offsetWidth ?? 320;
@@ -173,8 +176,13 @@ export default function RadarMap() {
     // CCTV: lembar Daftar yang terbuka jangan ikut menyempitkan framing (peta kamera harus
     // tetap dibuka di z11 dengan kelompok ≤9).
     const det = panel?.querySelector<HTMLElement>("#panel-detail");
-    const detH = det && !det.hidden && panel?.dataset.mode === "cctv" ? det.offsetHeight + 12 : 0;
+    const detH = ignoreDetail && det && !det.hidden && panel?.dataset.mode === "cctv" ? det.offsetHeight + 12 : 0;
     return { paddingTopLeft: [14, topH + 8], paddingBottomRight: [14, Math.round(panelH - detH) + 24] };
+  }, []);
+  const getViewPadding = useCallback(() => getPadding(true), [getPadding]);
+  const getFullPadding = useCallback(() => getPadding(false), [getPadding]);
+  const focusPanel = useCallback(() => {
+    panelRef.current?.querySelector<HTMLElement>(".answer")?.focus();
   }, []);
 
   // ---- efek samping ----
@@ -313,7 +321,7 @@ export default function RadarMap() {
     // pindah ke jawaban panel (tombol daftar sudah hilang)
     window.setTimeout(() => {
       cctvApi.current?.zoomToCams(cams, GROUP_ZOOM);
-      panelRef.current?.querySelector<HTMLElement>(".answer")?.focus();
+      focusPanel();
     }, 30);
   };
 
@@ -434,13 +442,14 @@ export default function RadarMap() {
             <CctvLayer
               onPick={pickCam}
               dead={deadCams}
-              getPadding={getPadding}
+              getPadding={getFullPadding}
               onCluster={onCluster}
+              focusPanel={focusPanel}
               selectedKey={camGroup?.key ?? null}
               apiRef={cctvApi}
             />
           )}
-          <MapController view={view} mode={mode} getPadding={getPadding} collapsed={collapsed} />
+          <MapController view={view} mode={mode} getPadding={getViewPadding} collapsed={collapsed} />
         </MapContainer>
       </div>
 
@@ -546,7 +555,7 @@ export default function RadarMap() {
             {mode === "hujan" && (
               <>
                 {radar.frames.length > 0 && (
-                  <RadarNow echo={radar.echo} time={rv.latest?.time} fresh={rv.fresh} boxShown={rv.ok} />
+                  <RadarNow echo={radar.echo} when={rv.latestWhen} fresh={rv.fresh} boxShown={rv.ok} />
                 )}
                 <RainMeta opacity={opacity} onOpacity={setOpacity} />
                 <ForecastInfo fc={forecast.data} strip={strip} />
