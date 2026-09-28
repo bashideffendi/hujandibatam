@@ -1280,15 +1280,16 @@ input[type="range"].rng:disabled {
   font-weight: 600;
   color: var(--text);
 }
-.credit {
-  margin: 0;
-  font-size: 13px;
-  line-height: 18px;
-  color: var(--text-muted);
-}
+/* Sumber Data (dl.kv): tautan berwarna, keterangan edisi di baris kecil di bawahnya */
 .credit a {
   color: var(--link);
   text-decoration: none;
+}
+.credit dd small {
+  display: block;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-muted);
 }
 
 /* ===== panel mode CCTV ===== */
