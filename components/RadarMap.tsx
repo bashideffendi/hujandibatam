@@ -13,7 +13,7 @@ import {
 } from "react-leaflet";
 import type { ConditionsResponse, ForecastResponse } from "@/lib/api-types";
 import { CCTV_HOST, MAPPED_CAMS, loadHls, type Cam } from "@/lib/cctv";
-import { isSmallLandscape, isWide, saveData } from "@/lib/client";
+import { isSmallLandscape, isWide, reduceMotion, saveData } from "@/lib/client";
 import { readInitialState } from "@/lib/initial-state";
 import { PREF, writePref } from "@/lib/prefs";
 import {
@@ -38,6 +38,7 @@ import {
   ofsView,
   rainAnswer,
   rainyMap,
+  scopeOf,
   rainCaption,
   radarView,
 } from "@/lib/status";
@@ -321,8 +322,18 @@ export default function RadarMap() {
   };
 
   const toggleDetail = () => {
-    if (!detail) setCamGroup(null);
-    setDetail(!detail);
+    const opening = !detail;
+    if (opening) setCamGroup(null);
+    setDetail(opening);
+    // HP: Detail muncul di bawah footer → gulir panel supaya isinya langsung terlihat
+    // (footer tetap kelihatan di atasnya). Di laptop Detail selalu tampil, tak perlu.
+    if (opening && !isWide()) {
+      window.setTimeout(() => {
+        const panel = panelRef.current;
+        const det = panel?.querySelector<HTMLElement>("#panel-detail");
+        if (panel && det) panel.scrollTo({ top: Math.max(0, det.offsetTop - 64), behavior: reduceMotion() ? "auto" : "smooth" });
+      }, 40);
+    }
   };
 
   // ---- turunan tampilan ----
@@ -335,7 +346,9 @@ export default function RadarMap() {
     now,
     broken: radar.broken,
   });
-  const rain = rainAnswer({ echo: radar.echo, frames: radar.frames, rv, status: radar.status, offline, now });
+  // Wilayah "Batam" menjawab untuk Kota Batam; "Kepri"/"Luas" untuk semua kab/kota Kepri.
+  const scope = scopeOf(view);
+  const rain = rainAnswer({ echo: radar.echo, frames: radar.frames, rv, status: radar.status, offline, now, scope });
   const rainCap = rainCaption(rv, now);
   const strip = forecastStrip(forecast.data, forecast.error, now);
   const tiles = forecastStrip(forecast.data, forecast.error, now, 4);
@@ -585,7 +598,7 @@ export default function RadarMap() {
           <div id="panel-detail" className="panel-detail">
             {mode === "hujan" && (
               <>
-                {radar.frames.length > 0 && <KecTable echo={radar.echo} when={rv.latestWhen} fresh={rv.fresh} />}
+                {radar.frames.length > 0 && <KecTable echo={radar.echo} when={rv.latestWhen} fresh={rv.fresh} scope={scope} />}
                 <ForecastSection fc={forecast.data} tiles={tiles} note={strip.note} />
                 <Conditions data={conditions.data} error={conditions.error} />
                 <RainOpacity opacity={opacity} onOpacity={setOpacity} />

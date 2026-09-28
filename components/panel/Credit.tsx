@@ -22,10 +22,10 @@ export default function Credit() {
         Gelombang
       </a>{" "}
       BMKG, Batas Kecamatan{" "}
-      <a href="https://satudata.batam.go.id/data/peta" {...ext}>
-        Satu Data Kota Batam
-      </a>
-      , Kamera Pemko Batam, Peta ©{" "}
+      <a href="https://geoservices.big.go.id/rbi/rest/services/BATASWILAYAH/BATAS_KECAMATAN_AR/MapServer" {...ext}>
+        Badan Informasi Geospasial
+      </a>{" "}
+      (edisi Juni 2026, disederhanakan untuk tampilan), Kamera Pemko Batam, Peta ©{" "}
       <a href="https://www.openstreetmap.org/copyright" {...ext}>
         OpenStreetMap
       </a>{" "}

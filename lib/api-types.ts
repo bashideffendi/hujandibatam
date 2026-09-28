@@ -4,7 +4,7 @@ import type { KecEcho } from "./kecamatan";
 import type { Frame } from "./radar";
 
 export type EchoSummary = {
-  /** ada kecamatan Kota Batam yang hujan (≥ KEC_RAIN_MIN_KM2 di daratannya) pada frame terbaru */
+  /** ada kecamatan KOTA BATAM yang hujan (≥ KEC_RAIN_MIN_KM2 di daratannya) pada frame terbaru */
   near: boolean;
   /** fraksi daratan Kota Batam yang terkena pantulan pada frame terbaru, 0–1 */
   coverage: number;
@@ -14,8 +14,17 @@ export type EchoSummary = {
   byClass?: { ringan: number; sedang: number; lebat: number };
   /** luas daratan Kota Batam yang terpetakan ke piksel radar (km²) */
   landKm2?: number;
-  /** hujan per kecamatan (km², 1 desimal), 12 entri */
+  /** hujan per kecamatan (km², 1 desimal): semua kecamatan Kepri dalam jangkauan radar */
   kec?: KecEcho[];
+  /** ringkasan seluruh Kepri dalam jangkauan (Batam, Tanjungpinang, Bintan, Karimun, Lingga) */
+  region?: {
+    near: boolean;
+    coverage: number;
+    level: "ringan" | "sedang" | "lebat" | null;
+    landKm2: number;
+    /** ts (SGT) frame terakhir yang ada hujannya di Kepri dalam jendela lookback */
+    lastTs: string | null;
+  };
   /** ts (SGT) frame terakhir yang ada hujannya dalam jendela lookback; null = tidak ada */
   lastTs: string | null;
   /** panjang jendela yang diperiksa ke belakang, menit */

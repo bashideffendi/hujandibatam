@@ -1,13 +1,18 @@
 // ---------------------------------------------------------------------------
-// Bangun data kecamatan Kota Batam untuk app dari data/kecamatan-batam.geojson
-// (batas resmi Satu Data Kota Batam). Jalankan ulang kalau sumber atau RADAR_BOUNDS berubah:
+// Bangun data kecamatan Kepulauan Riau untuk app dari data/kecamatan-kepri.geojson
+// (batas resmi Badan Informasi Geospasial, edisi Juni 2026). Jalankan ulang kalau sumber
+// atau RADAR_BOUNDS berubah:
 //
 //   node scripts/build-kecamatan.mjs
 //
+// Hanya kecamatan yang ≥90% daratannya di dalam LINGKARAN jangkauan radar MSS (240 km dari
+// pusat citra) yang dipakai — Natuna, Anambas, dan Tambelan di luar jangkauan, jadi hujannya
+// memang tidak bisa dihitung.
+//
 // Hasil:
-//   lib/kecamatan-geo.json  — geometri DISEDERHANAKAN (Douglas–Peucker ±33 m, pulau <0,01 km²
-//                             dibuang) + titik label, untuk digambar di peta (klien).
-//   lib/kecamatan-mask.ts   — piksel radar MSS (480×480, 1 km/px) yang jatuh di daratan tiap
+//   lib/kecamatan-geo.json  — geometri DISEDERHANAKAN (Douglas–Peucker: Batam ±33 m, kab/kota
+//                             lain ±55 m; pulau kecil dibuang) + titik label, untuk peta (klien).
+//   lib/kecamatan-mask.ts   — piksel radar (480×480, 1 km/px) yang jatuh di daratan tiap
 //                             kecamatan + bobot pecahannya (sub-sampel 4×4 per piksel, jadi
 //                             piksel pantai dihitung sebagian). Dipakai server (lib/echo.ts).
 // ---------------------------------------------------------------------------
@@ -21,10 +26,15 @@ const BOUNDS = [
 const W = 480;
 const H = 480;
 const SUB = 4; // sub-sampel per sumbu per piksel
-const SIMPLIFY_DEG = 0.0003; // ±33 m — di bawah 1 piksel layar pada zoom 12 (±38 m)
-const MIN_RING_KM2 = 0.01;
+const RADAR_R_PX = 240; // jangkauan 240 km = 240 px dari pusat citra
+const MIN_COVER = 0.9; // kecamatan dipakai kalau ≥90% daratannya terjangkau radar
+// Batam dilihat sampai zoom 12 (±38 m/px); kab/kota lain biasanya zoom 9–11.
+const SIMPLIFY_DEG = { Batam: 0.0003, default: 0.0005 };
+const MIN_RING_KM2 = { Batam: 0.01, default: 0.03 };
+// Urutan kab/kota di UI (Batam dulu, lalu dari yang terdekat).
+const KAB_ORDER = ["Batam", "Tanjungpinang", "Bintan", "Karimun", "Lingga", "Anambas", "Natuna"];
 
-const src = JSON.parse(readFileSync(new URL("../data/kecamatan-batam.geojson", import.meta.url), "utf8"));
+const src = JSON.parse(readFileSync(new URL("../data/kecamatan-kepri.geojson", import.meta.url), "utf8"));
 
 // ---- geometri -------------------------------------------------------------
 const KM_LAT = 110.57;
@@ -48,6 +58,8 @@ function inRing(x, y, ring) {
   }
   return inside;
 }
+// poligon = [luar, ...lubang]
+const inPoly = (x, y, poly) => inRing(x, y, poly[0]) && !poly.slice(1).some((h) => inRing(x, y, h));
 function bbox(ring) {
   let [w, s, e, n] = [Infinity, Infinity, -Infinity, -Infinity];
   for (const [x, y] of ring) {
@@ -121,7 +133,7 @@ function labelPoint(ring) {
     return m;
   };
   let best = null;
-  const N = 48;
+  const N = 40;
   for (let i = 0; i <= N; i++) {
     for (let j = 0; j <= N; j++) {
       const x = b.w + ((b.e - b.w) * i) / N;
@@ -134,101 +146,140 @@ function labelPoint(ring) {
   return best ? [+best.y.toFixed(5), +best.x.toFixed(5)] : null;
 }
 
-const r5 = (v) => Math.round(v * 1e5) / 1e5;
-const r4 = (v) => Math.round(v * 1e4) / 1e4; // ±11 m, cukup untuk garis di peta
-const kec = src.features.map((f) => {
-  const rings = f.geometry.coordinates.map((poly) => poly[0]);
-  const areas = rings.map(ringAreaKm2);
-  const biggest = rings[areas.indexOf(Math.max(...areas))];
+const polysOf = (g) => (g.type === "Polygon" ? [g.coordinates] : g.coordinates);
+const all = src.features.map((f) => {
+  const polys = polysOf(f.geometry);
+  const outerAreas = polys.map((p) => ringAreaKm2(p[0]));
+  const biggest = polys[outerAreas.indexOf(Math.max(...outerAreas))][0];
   return {
+    code: f.properties.code,
     name: f.properties.name,
-    rings,
-    boxes: rings.map(bbox),
-    areaKm2: areas.reduce((s, a) => s + a, 0),
+    kab: f.properties.kab,
+    polys,
+    boxes: polys.map((p) => bbox(p[0])),
+    areaKm2: outerAreas.reduce((s, a) => s + a, 0),
     label: labelPoint(biggest),
   };
 });
 
-// ---- geometri klien (disederhanakan) --------------------------------------
-const geo = {
-  type: "FeatureCollection",
-  features: kec
-    .map((k) => ({
-      type: "Feature",
-      properties: { name: k.name, label: k.label, areaKm2: +k.areaKm2.toFixed(1) },
-      geometry: {
-        type: "MultiPolygon",
-        coordinates: k.rings
-          .filter((r) => ringAreaKm2(r) >= MIN_RING_KM2)
-          .map((r) => [simplifyRing(r, SIMPLIFY_DEG).map(([x, y]) => [r4(x), r4(y)])])
-          .filter((p) => p[0].length >= 4),
-      },
-    }))
-    .sort((a, b) => a.properties.name.localeCompare(b.properties.name, "id")),
-};
-writeFileSync(new URL("../lib/kecamatan-geo.json", import.meta.url), JSON.stringify(geo));
-
-// ---- masker piksel radar --------------------------------------------------
+// ---- masker piksel radar (+ jangkauan) -------------------------------------
 const [[S, Wl], [N, E]] = BOUNDS;
 const lngAt = (px) => Wl + (px / W) * (E - Wl);
 const latAt = (py) => N - (py / H) * (N - S);
-let all = { w: Infinity, s: Infinity, e: -Infinity, n: -Infinity };
-for (const k of kec)
-  for (const b of k.boxes) {
-    all = { w: Math.min(all.w, b.w), s: Math.min(all.s, b.s), e: Math.max(all.e, b.e), n: Math.max(all.n, b.n) };
-  }
-const x0 = Math.max(0, Math.floor(((all.w - Wl) / (E - Wl)) * W) - 1);
-const x1 = Math.min(W - 1, Math.ceil(((all.e - Wl) / (E - Wl)) * W) + 1);
-const y0 = Math.max(0, Math.floor(((N - all.n) / (N - S)) * H) - 1);
-const y1 = Math.min(H - 1, Math.ceil(((N - all.s) / (N - S)) * H) + 1);
-const masks = kec.map(() => new Map());
-for (let py = y0; py <= y1; py++) {
-  for (let px = x0; px <= x1; px++) {
-    for (let sy = 0; sy < SUB; sy++) {
-      for (let sx = 0; sx < SUB; sx++) {
-        const lng = lngAt(px + (sx + 0.5) / SUB);
-        const lat = latAt(py + (sy + 0.5) / SUB);
-        // satu sub-sampel dimiliki paling banyak SATU kecamatan (batas digitasi bisa bertumpuk)
-        for (let ki = 0; ki < kec.length; ki++) {
-          const k = kec[ki];
-          let hit = false;
-          for (let r = 0; r < k.rings.length && !hit; r++) {
-            const b = k.boxes[r];
-            if (lng < b.w || lng > b.e || lat < b.s || lat > b.n) continue;
-            hit = inRing(lng, lat, k.rings[r]);
-          }
-          if (hit) {
-            const i = py * W + px;
-            masks[ki].set(i, (masks[ki].get(i) ?? 0) + 1);
-            break;
+const pxOf = (lng) => ((lng - Wl) / (E - Wl)) * W;
+const pyOf = (lat) => ((N - lat) / (N - S)) * H;
+const SUB2 = SUB * SUB;
+function maskOf(k) {
+  const m = new Map(); // indeks piksel → jumlah sub-sampel di daratan
+  let inRadar = 0;
+  let total = 0;
+  for (let pi = 0; pi < k.polys.length; pi++) {
+    const b = k.boxes[pi];
+    const x0 = Math.max(0, Math.floor(pxOf(b.w)));
+    const x1 = Math.min(W - 1, Math.floor(pxOf(b.e)));
+    const y0 = Math.max(0, Math.floor(pyOf(b.n)));
+    const y1 = Math.min(H - 1, Math.floor(pyOf(b.s)));
+    for (let py = y0; py <= y1; py++) {
+      for (let px = x0; px <= x1; px++) {
+        let hits = 0;
+        for (let sy = 0; sy < SUB; sy++) {
+          for (let sx = 0; sx < SUB; sx++) {
+            if (inPoly(lngAt(px + (sx + 0.5) / SUB), latAt(py + (sy + 0.5) / SUB), k.polys[pi])) hits++;
           }
         }
+        if (!hits) continue;
+        total += hits;
+        const r = Math.hypot(px + 0.5 - W / 2, py + 0.5 - H / 2);
+        if (r > RADAR_R_PX) continue; // di luar lingkaran radar: tak ada data
+        inRadar += hits;
+        const i = py * W + px;
+        m.set(i, (m.get(i) ?? 0) + hits);
       }
     }
   }
+  return { m, cover: total ? inRadar / total : 0 };
 }
-const SUB2 = SUB * SUB;
-const rows = kec
-  .map((k, ki) => {
-    const idx = [...masks[ki].keys()].sort((a, b) => a - b);
-    const w = idx.map((i) => masks[ki].get(i));
-    const land = w.reduce((s, v) => s + v, 0) / SUB2;
-    return { name: k.name, landKm2: +land.toFixed(1), idx, w };
-  })
-  .sort((a, b) => a.name.localeCompare(b.name, "id"));
 
-const ts = `// DIHASILKAN oleh scripts/build-kecamatan.mjs dari data/kecamatan-batam.geojson
-// (batas kecamatan Satu Data Kota Batam). JANGAN diedit tangan — jalankan ulang skripnya.
+const rows = [];
+const dropped = [];
+for (const k of all) {
+  const { m, cover } = maskOf(k);
+  if (cover < MIN_COVER) {
+    dropped.push(`${k.kab}/${k.name} (${Math.round(cover * 100)}%)`);
+    continue;
+  }
+  const idx = [...m.keys()].sort((a, b) => a - b);
+  rows.push({
+    code: k.code,
+    name: k.name,
+    kab: k.kab,
+    landKm2: +(idx.reduce((s, i) => s + m.get(i), 0) / SUB2).toFixed(1),
+    idx,
+    w: idx.map((i) => m.get(i)),
+  });
+}
+const kabRank = (kab) => KAB_ORDER.indexOf(kab) + 1 || 99;
+rows.sort((a, b) => kabRank(a.kab) - kabRank(b.kab) || a.name.localeCompare(b.name, "id"));
+const kept = new Set(rows.map((r) => r.code));
+
+// ---- geometri klien (disederhanakan) --------------------------------------
+const r4 = (v) => Math.round(v * 1e4) / 1e4; // ±11 m, cukup untuk garis di peta
+const geo = {
+  type: "FeatureCollection",
+  features: all
+    .filter((k) => kept.has(k.code))
+    .sort((a, b) => kabRank(a.kab) - kabRank(b.kab) || a.name.localeCompare(b.name, "id"))
+    .map((k) => {
+      const tol = SIMPLIFY_DEG[k.kab] ?? SIMPLIFY_DEG.default;
+      const minA = MIN_RING_KM2[k.kab] ?? MIN_RING_KM2.default;
+      return {
+        type: "Feature",
+        properties: { code: k.code, name: k.name, kab: k.kab, label: k.label, areaKm2: +k.areaKm2.toFixed(1) },
+        geometry: {
+          type: "MultiPolygon",
+          coordinates: k.polys
+            .filter((p) => ringAreaKm2(p[0]) >= minA)
+            .map((p) =>
+              p
+                .map((ring) => simplifyRing(ring, tol).map(([x, y]) => [r4(x), r4(y)]))
+                .filter((ring) => ring.length >= 4),
+            )
+            .filter((p) => p.length && p[0].length >= 4),
+        },
+      };
+    }),
+};
+writeFileSync(new URL("../lib/kecamatan-geo.json", import.meta.url), JSON.stringify(geo));
+
+const ts = `// DIHASILKAN oleh scripts/build-kecamatan.mjs dari data/kecamatan-kepri.geojson
+// (batas kecamatan Badan Informasi Geospasial, edisi Juni 2026). JANGAN diedit tangan —
+// jalankan ulang skripnya.
 //
-// Tiap kecamatan: indeks piksel radar (y*${W}+x) yang menyentuh daratannya + bobot w
-// (jumlah sub-sampel dari ${SUB2} yang jatuh di daratan kecamatan itu; w/${SUB2} = km² di piksel itu).
+// Tiap kecamatan (≥${MIN_COVER * 100}% daratannya dalam jangkauan radar): indeks piksel radar
+// (y*${W}+x) yang menyentuh daratannya + bobot w (jumlah sub-sampel dari ${SUB2} yang jatuh di
+// daratan kecamatan itu; w/${SUB2} = km² di piksel itu).
 export const KEC_MASK_BOUNDS: [[number, number], [number, number]] = ${JSON.stringify(BOUNDS)};
 export const KEC_MASK_SIZE = { w: ${W}, h: ${H}, sub2: ${SUB2} } as const;
-export const KEC_MASK: { name: string; landKm2: number; idx: number[]; w: number[] }[] = ${JSON.stringify(rows)};
+export const KEC_MASK: { code: string; name: string; kab: string; landKm2: number; idx: number[]; w: number[] }[] =
+  ${JSON.stringify(rows)};
 `;
 writeFileSync(new URL("../lib/kecamatan-mask.ts", import.meta.url), ts);
 
-for (const r of rows) console.log(`${r.name.padEnd(16)} darat ${String(r.landKm2).padStart(6)} km²  piksel ${r.idx.length}`);
-const geoBytes = Buffer.byteLength(JSON.stringify(geo));
-const pts = geo.features.reduce((s, f) => s + f.geometry.coordinates.reduce((a, p) => a + p[0].length, 0), 0);
-console.log(`geo: ${pts} titik, ${Math.round(geoBytes / 1024)} KB`);
+const byKab = {};
+for (const r of rows) (byKab[r.kab] ??= []).push(r);
+for (const [kab, list] of Object.entries(byKab)) {
+  const land = list.reduce((s, r) => s + r.landKm2, 0);
+  console.log(`${kab.padEnd(14)} ${String(list.length).padStart(2)} kecamatan, darat ${land.toFixed(0)} km²`);
+}
+console.log("tak terjangkau radar:", dropped.join(", ") || "-");
+let [bw, bs, be, bn] = [Infinity, Infinity, -Infinity, -Infinity];
+for (const k of all.filter((k) => kept.has(k.code)))
+  for (const b of k.boxes) {
+    bw = Math.min(bw, b.w);
+    bs = Math.min(bs, b.s);
+    be = Math.max(be, b.e);
+    bn = Math.max(bn, b.n);
+  }
+console.log(`bbox terpakai: [[${bs.toFixed(3)}, ${bw.toFixed(3)}], [${bn.toFixed(3)}, ${be.toFixed(3)}]]`);
+const pts = geo.features.reduce((s, f) => s + f.geometry.coordinates.reduce((a, p) => a + p.reduce((q, r) => q + r.length, 0), 0), 0);
+console.log(`geo: ${geo.features.length} fitur, ${pts} titik, ${Math.round(Buffer.byteLength(JSON.stringify(geo)) / 1024)} KB; mask ${rows.reduce((s, r) => s + r.idx.length, 0)} piksel`);

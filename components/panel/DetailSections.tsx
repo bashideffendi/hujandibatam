@@ -1,44 +1,74 @@
 import type { EchoSummary, ForecastResponse, PerairanResponse } from "@/lib/api-types";
-import { KEC_RAIN_MIN_KM2, KEC_TOTAL } from "@/lib/kecamatan";
-import { kecTable, perairanDetail, type ForecastStripView } from "@/lib/status";
+import { KEC_RAIN_MIN_KM2, type RainScope } from "@/lib/kecamatan";
+import { KAB_LIST, kecTable, perairanDetail, type ForecastStripView, type KecRow } from "@/lib/status";
 import { WeatherIcon } from "../icons";
 
+function KecGrid({ rows }: { rows: KecRow[] }) {
+  return (
+    <ul className="kec-grid">
+      {rows.map((r) => (
+        <li key={r.code} data-rain={r.level ? "" : undefined}>
+          <span className="kec-n">{r.name}</span>
+          <span className="kec-s">
+            {r.level && <span className="answer-dot" data-level={r.level} aria-hidden />}
+            {r.text}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /**
- * Status tiap kecamatan dari citra radar terbaru: yang hujan di atas (berlatar), sisanya
- * tipis. Judul menyebut jamnya kalau citra terbaru tidak segar (terlambat/terputus/offline).
+ * Status tiap kecamatan dari citra radar terbaru, dalam cakupan wilayah yang dipilih
+ * (Kota Batam, atau semua kab/kota Kepri dikelompokkan). Yang hujan di atas (berlatar),
+ * sisanya tipis. Judul menyebut jamnya kalau citra terbaru tidak segar.
  */
-export function KecTable({ echo, when, fresh }: { echo: EchoSummary | null; when: string; fresh: boolean }) {
-  const rows = kecTable(echo);
-  const rainy = rows.filter((r) => r.level).length;
+export function KecTable({
+  echo,
+  when,
+  fresh,
+  scope,
+}: {
+  echo: EchoSummary | null;
+  when: string;
+  fresh: boolean;
+  scope: RainScope;
+}) {
+  const groups = kecTable(echo, scope);
+  const total = groups.reduce((s, g) => s + g.rows.length, 0);
+  const rainy = groups.reduce((s, g) => s + g.rainy, 0);
+  const multi = groups.length > 1;
   return (
     <section className="d-sec">
       <h3 className="d-title">
         {fresh || !when ? "Hujan per Kecamatan" : `Hujan per Kecamatan, ${when}`}
-        {rows.length > 0 && (
+        {total > 0 && (
           <small>
-            {rainy} dari {KEC_TOTAL}
+            {rainy} dari {total}
           </small>
         )}
       </h3>
-      {rows.length ? (
-        <ul className="kec-grid">
-          {rows.map((r) => (
-            <li key={r.name} data-rain={r.level ? "" : undefined}>
-              <span className="kec-n">{r.name}</span>
-              <span className="kec-s">
-                {r.level && <span className="answer-dot" data-level={r.level} aria-hidden />}
-                {r.text}
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : (
+      {!total ? (
         <p className="d-note">Deteksi hujan otomatis sedang gangguan, jadi lihat warna di peta.</p>
+      ) : multi ? (
+        groups.map((g) => (
+          <div key={g.kab} className="kec-group">
+            <h4 className="kec-kab">
+              {g.kab === "Batam" || g.kab === "Tanjungpinang" ? `Kota ${g.kab}` : `Kabupaten ${g.kab}`}
+              <small>{g.rainy ? `${g.rainy} dari ${g.rows.length} Hujan` : "Tidak Hujan"}</small>
+            </h4>
+            <KecGrid rows={g.rows} />
+          </div>
+        ))
+      ) : (
+        <KecGrid rows={groups[0].rows} />
       )}
       <p className="d-note">
         Dihitung dari radar MSS (1 piksel ≈ 1 km²) di atas daratan tiap kecamatan, jadi hujan di laut tidak
-        ikut. Kecamatan disebut hujan kalau luasnya minimal {KEC_RAIN_MIN_KM2} km². Ini perkiraan radar dari
-        pantulan butiran air, jadi bisa beda dengan yang kamu rasakan.
+        ikut. Kecamatan disebut hujan kalau luasnya minimal {KEC_RAIN_MIN_KM2} km². Mencakup {KAB_LIST}; Natuna
+        dan Anambas di luar jangkauan radar. Ini perkiraan radar dari pantulan butiran air, jadi bisa beda
+        dengan yang kamu rasakan.
       </p>
     </section>
   );

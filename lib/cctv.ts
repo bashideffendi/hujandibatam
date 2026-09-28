@@ -41,7 +41,7 @@ import { CCTV_HOST } from "./sources";
 export type Cam = {
   slug: string;
   name: string;
-  /** kecamatan — dicocokkan dengan batas resmi Satu Data Kota Batam (data/kecamatan-batam.geojson) */
+  /** kecamatan — dicocokkan dengan batas BIG edisi Juni 2026 (data/kecamatan-kepri.geojson) */
   area: string;
   lat?: number;
   lng?: number;
@@ -127,13 +127,13 @@ export const CAMS: Cam[] = [
 
   // — Lubuk Baja / Jodoh–Nagoya —
   { slug: "cobaan", name: "Nagoya Plaza", area: "Lubuk Baja", lat: 1.146140, lng: 104.010987 },
-  { slug: "pasarjodoh2", name: "Depan Pasar Jodoh", area: "Lubuk Baja", lat: 1.151230, lng: 104.005230 },
+  { slug: "pasarjodoh2", name: "Depan Pasar Jodoh", area: "Batu Ampar", lat: 1.151230, lng: 104.005230 },
 
   // — Sekupang / Tiban —
   { slug: "sekupang", name: "Pelabuhan Sekupang", area: "Sekupang", lat: 1.126240, lng: 103.928415 },
   { slug: "seiladi2", name: "Simpang Sei Ladi", area: "Sekupang", lat: 1.108161, lng: 104.011206, approx: true },
   { slug: "pura1", name: "Depan Pura Sei Ladi", area: "Sekupang", lat: 1.108161, lng: 104.011206, approx: true },
-  { slug: "matakucing1", name: "Mata Kucing", area: "Sekupang", lat: 1.085136, lng: 103.971603, approx: true },
+  { slug: "matakucing1", name: "Mata Kucing", area: "Batu Aji", lat: 1.085136, lng: 103.971603, approx: true },
   // Titik = centroid perumahan Delta Villa (reverse-geocode), ±240 m dari jalan yang
   // difilmkan (Jl. Pangeran Diponegoro) → ditandai perkiraan (audit 2026-09).
   { slug: "delta2", name: "Depan Delta Villa Arah Mata Kucing", area: "Sekupang", lat: 1.102452, lng: 103.960683, approx: true },
@@ -156,11 +156,12 @@ export const CAMS: Cam[] = [
   { slug: "danganom1", name: "Taman Dang Anom", area: "Batam Kota", lat: 1.121378, lng: 104.019885 },
   { slug: "danganom3", name: "Taman Dang Anom Arah Jalan", area: "Batam Kota", lat: 1.121378, lng: 104.019885 },
   // CATATAN: slug bilang "batuaji" tapi lokasinya BUKAN Kec. Batu Aji. "damkar" =
-  // pemadam kebakaran, di sebelah Stadion Temenggung. Menurut batas kecamatan resmi
-  // (Satu Data Kota Batam, dicek 2026-09-28) titik ini masuk Kec. Sei Beduk.
+  // pemadam kebakaran, di sebelah Stadion Temenggung. Menurut batas kecamatan BIG edisi Juni
+  // 2026 (dicek 2026-09-28) titik ini masuk Kec. Batam Kota (batas Satu Data Batam menaruhnya
+  // di Sei Beduk — dua sumber resmi berbeda di sini; app memakai BIG).
   // "Arah Batu Aji" di nama = arah hadap.
-  { slug: "batuajidamkar1", name: "Depan Stadion Temenggung", area: "Sei Beduk", lat: 1.088491, lng: 104.033566 },
-  { slug: "batuajidamkar3", name: "Depan Stadion Temenggung Arah Batu Aji", area: "Sei Beduk", lat: 1.088491, lng: 104.033566 },
+  { slug: "batuajidamkar1", name: "Depan Stadion Temenggung", area: "Batam Kota", lat: 1.088491, lng: 104.033566 },
+  { slug: "batuajidamkar3", name: "Depan Stadion Temenggung Arah Batu Aji", area: "Batam Kota", lat: 1.088491, lng: 104.033566 },
 ];
 
 /** Kamera yang punya koordinat → dipasang sebagai pin di peta. */

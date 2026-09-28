@@ -7,9 +7,10 @@ import { batamStats, type EchoStats } from "@/lib/echo";
 // jeda pakai angka tetap, server PROBE file paling baru yang BENERAN udah terbit, lalu
 // susun 30 frame mundur dari situ → selalu sefresh mungkin.
 //
-// Sekalian menjawab pertanyaan inti — "kecamatan mana di Batam yang lagi hujan?" —
-// dengan menghitung piksel PNG di daratan tiap kecamatan (lib/echo.ts). Frame terbaru
-// selalu dihitung; kalau tak ada yang hujan, mundur maksimal 1 jam mencari hujan terakhir.
+// Sekalian menjawab pertanyaan inti — "kecamatan mana yang lagi hujan?" (Kota Batam &
+// kab/kota Kepri lain dalam jangkauan radar) — dengan menghitung piksel PNG di daratan tiap
+// kecamatan (lib/echo.ts). Frame terbaru selalu dihitung; kalau tak ada yang hujan, mundur
+// maksimal 1 jam mencari hujan terakhir (terpisah untuk Batam dan untuk Kepri).
 // Hasil per-ts di-cache di module (PNG per timestamp tidak pernah berubah).
 //
 // Dynamic: respons dihitung ulang per request (jam frame selalu terbaru). CDN boleh
@@ -150,27 +151,43 @@ async function echoSummary(frames: Frame[]): Promise<EchoSummary | null> {
   const latest = frames[frames.length - 1];
   const now = await echoFor(latest.ts);
   if (!now) return null; // 404/gagal decode → jangan mengarang
+  // "Terakhir hujan" dicari terpisah untuk Kota Batam dan untuk seluruh Kepri.
   let lastTs: string | null = now.near ? latest.ts : null;
-  if (!lastTs) {
-    // mundur per batch (paralel), berhenti di echo pertama; batas 1 jam.
+  let regionLastTs: string | null = now.region.near ? latest.ts : null;
+  if (!lastTs || !regionLastTs) {
+    // mundur per batch (paralel), berhenti begitu keduanya ketemu; batas 1 jam.
     const oldest = Math.max(0, frames.length - 1 - ECHO_LOOKBACK);
-    for (let i = frames.length - 2; i >= oldest && !lastTs; i -= ECHO_BATCH) {
+    for (let i = frames.length - 2; i >= oldest && (!lastTs || !regionLastTs); i -= ECHO_BATCH) {
       const batch: string[] = [];
       for (let k = i; k > i - ECHO_BATCH && k >= oldest; k--) batch.push(frames[k].ts);
       const res = await Promise.all(batch.map(echoFor));
-      const hit = res.findIndex((s) => s?.near);
-      if (hit >= 0) lastTs = batch[hit];
+      if (!lastTs) {
+        const hit = res.findIndex((s) => s?.near);
+        if (hit >= 0) lastTs = batch[hit];
+      }
+      if (!regionLastTs) {
+        const hit = res.findIndex((s) => s?.region.near);
+        if (hit >= 0) regionLastTs = batch[hit];
+      }
     }
   }
+  const r3 = (v: number) => Math.round(v * 1000) / 1000;
   return {
     near: now.near,
-    coverage: Math.round(now.coverage * 1000) / 1000,
+    coverage: r3(now.coverage),
     level: now.level,
     byClass: now.byClass,
     landKm2: now.landKm2,
     kec: now.kec,
     lastTs,
     lookbackMin: ECHO_LOOKBACK * STEP_MIN,
+    region: {
+      near: now.region.near,
+      coverage: r3(now.region.coverage),
+      level: now.region.level,
+      landKm2: now.region.landKm2,
+      lastTs: regionLastTs,
+    },
   };
 }
 

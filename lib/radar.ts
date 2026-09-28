@@ -51,7 +51,8 @@ export const VIEWS: Record<ViewKey, { label: string; bounds: [[number, number], 
   // Pulau Batam + Belakang Padang + ujung Rempang: HP dibuka z10, laptop z11.
   batam: { label: "Batam", bounds: [[0.96, 103.84], [1.21, 104.2]] },
   regional: { label: "Luas", bounds: [[-0.4, 102.4], [2.7, 105.3]] },
-  kepri: { label: "Kepri", bounds: [[0.1, 103.25], [1.28, 104.75]] },
+  // Batam, Tanjungpinang, Bintan, Karimun, dan pulau utama Lingga (kab/kota dalam jangkauan radar).
+  kepri: { label: "Kepri", bounds: [[-0.6, 103.25], [1.3, 104.85]] },
   // Khusus mode OMBAK: mundur ke timur-laut biar Anambas + Natuna keliatan.
   natuna: { label: "Natuna", bounds: [[-1.4, 102.6], [4.8, 108.2]] },
   // Khusus mode CCTV: kotak 28 kamera (1,0346–1,1668 LU, 103,928–104,132 BT) + margin

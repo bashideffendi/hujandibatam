@@ -230,6 +230,17 @@ h4 {
   flex: none;
   box-shadow: 0 0 0 1.5px var(--cam-pin-ring);
 }
+/* kecamatan hujan yang labelnya tersisih karena bertabrakan: cukup titik kelasnya */
+.kec-dot.kec-dot-solo {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  width: 9px;
+  height: 9px;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 2px var(--cam-pin-ring), 0 1px 4px rgba(0, 0, 0, 0.3);
+}
 .kec-dot[data-level="ringan"] {
   background: var(--dot-ringan);
 }
@@ -922,9 +933,16 @@ input[type="range"].rng:disabled {
   margin: 12px calc(-1 * var(--pad)) 0;
   padding: 12px var(--pad) 2px;
   border-top: 1px solid var(--panel-border);
-  max-height: 36dvh;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+}
+/* HP: Detail/Daftar atau daftar kelompok kamera terbuka → panel boleh memanjang sampai
+   tepat di bawah bilah atas dan SELURUH panel jadi satu area gulir besar (dulu Detail
+   bergulir di kotak kecil ±36dvh di dalam panel 70dvh — terlalu sempit). */
+.panel[data-detail="true"] {
+  max-height: calc(100dvh - 72px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
+}
+/* daftar kelompok: sisakan ruang peta supaya gelembung terpilih tetap terlihat */
+.panel[data-listing="true"] {
+  max-height: 66dvh;
 }
 .d-sec {
   display: flex;
@@ -991,6 +1009,30 @@ input[type="range"].rng:disabled {
 .kec-s .answer-dot {
   width: 8px;
   height: 8px;
+}
+/* cakupan Kepri: kecamatan dikelompokkan per kab/kota */
+.kec-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.kec-group + .kec-group {
+  margin-top: 8px;
+}
+.kec-kab {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.kec-kab small {
+  font-size: 12.5px;
+  font-weight: 500;
 }
 /* petak prakiraan BMKG — hanya di sidebar laptop (HP memakai strip ringkas di panel) */
 .fc-tiles {
@@ -1331,12 +1373,7 @@ input[type="range"].rng:disabled {
   margin: 0 calc(-1 * var(--pad));
   padding: 0;
 }
-/* total panel saat daftar terbuka ≤ 60dvh: pegangan + judul + tautan + footer ≈ 176 px */
-.cam-list .cam-rows {
-  max-height: calc(60dvh - 176px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-}
+/* daftar kelompok bergulir bersama panel (satu area gulir), tanpa kotak gulir sendiri */
 .cam-row {
   display: flex;
   align-items: center;
@@ -1910,6 +1947,11 @@ input[type="range"].rng:disabled {
   }
   .panel-handle {
     display: none;
+  }
+  /* batas tinggi versi HP (Detail/daftar terbuka) tak berlaku: sidebar selalu setinggi layar */
+  .panel[data-detail],
+  .panel[data-listing] {
+    max-height: none;
   }
   .panel-body > * {
     order: 2;

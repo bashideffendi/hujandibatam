@@ -11,7 +11,16 @@ import type {
   PerairanEntry,
   PerairanResponse,
 } from "./api-types";
-import { KEC_TOTAL, kecLevel, rainyKec, type RainLevel } from "./kecamatan";
+import {
+  KAB_ORDER,
+  inScope,
+  kabRank,
+  kecLevel,
+  rainyKec,
+  type KecEcho,
+  type RainLevel,
+  type RainScope,
+} from "./kecamatan";
 import { ageMinutesOf, ofsValidWib, tsToInstant, type Frame } from "./radar";
 
 /** Di atas ini citra radar dianggap terlambat (MSS terlambat/macet). */
@@ -171,13 +180,24 @@ export function radarView(a: {
   };
 }
 
+/** Wilayah peta → cakupan jawaban: "Batam" = Kota Batam; "Kepri"/"Luas" = semua kab/kota Kepri. */
+export const scopeOf = (view: string): RainScope => (view === "batam" ? "batam" : "kepri");
+
+/** Data echo yang dipersempit ke satu cakupan. Respons lama tanpa `region` → pakai data Batam. */
+function scoped(e: EchoSummary, scope: RainScope): { kec: KecEcho[] | null; near: boolean; lastTs: string | null } {
+  const kec = e.kec ? e.kec.filter((k) => inScope(k, scope)) : null;
+  if (scope === "kepri" && e.region) return { kec, near: e.region.near, lastTs: e.region.lastTs };
+  return { kec, near: e.near, lastTs: e.lastTs };
+}
+
 /**
  * Kelas hujan yang JUJUR. Per kecamatan (lib/kecamatan.ts): kelas terderas di antara kecamatan
- * yang hujan. Respons lama tanpa per kecamatan: kelas tertinggi yang luasnya ≥10 km².
+ * yang hujan dalam cakupan. Respons lama tanpa per kecamatan: kelas tertinggi yang luasnya ≥10 km².
  */
-export function rainLevel(e: EchoSummary): EchoLevel | null {
-  if (!e.near) return null;
-  if (e.kec) return rainyKec(e.kec)[0]?.level ?? null;
+export function rainLevel(e: EchoSummary, scope: RainScope = "batam"): EchoLevel | null {
+  const sc = scoped(e, scope);
+  if (!sc.near) return null;
+  if (sc.kec) return rainyKec(sc.kec)[0]?.level ?? null;
   const b = e.byClass;
   if (!b) return e.level; // respons lama tanpa hitungan per kelas
   if (b.lebat >= LEVEL_MIN_PX) return "lebat";
@@ -203,25 +223,51 @@ export function joinNames(names: string[]): string {
   return `${names.slice(0, -1).join(", ")}, dan ${names[names.length - 1]}`;
 }
 
-/** Di mana hujannya: nama kecamatan (≤3), "5 dari 12 Kecamatan", atau "Kota Batam". */
-function rainWhere(echo: EchoSummary): string {
-  if (!echo.kec) return "Sekitar Batam"; // respons lama
-  const rainy = rainyKec(echo.kec);
-  if (!rainy.length) return "Kota Batam";
-  if (rainy.length <= 3) return joinNames(rainy.map((k) => k.name));
-  return `${rainy.length} dari ${KEC_TOTAL} Kecamatan`;
+/**
+ * Di mana hujannya, dua bentuk:
+ *  - `phrase` untuk kalimat ("Hujan Ringan di …"): nama kecamatan / "5 Kecamatan Kepri";
+ *  - `line` untuk baris konteks panel ("Di Sekupang dan Batu Aji", "5 Kecamatan di Batam dan Bintan").
+ * Batam: nama kecamatan (≤3) atau "5 dari 12 Kecamatan". Kepri: nama + kab/kota dalam kurung
+ * (≤2), atau jumlah kecamatan per kab/kota.
+ */
+function rainWhere(echo: EchoSummary, scope: RainScope): { phrase: string; line: string; none: string } {
+  const sc = scoped(echo, scope);
+  const none = scope === "batam" ? "Kota Batam" : "Kepri";
+  if (!sc.kec) return { phrase: "Sekitar Batam", line: "Sekitar Batam", none: "Sekitar Batam" }; // respons lama
+  const rainy = rainyKec(sc.kec);
+  if (!rainy.length) return { phrase: none, line: none, none };
+  if (scope === "batam") {
+    if (rainy.length <= 3) {
+      const names = joinNames(rainy.map((k) => k.name));
+      return { phrase: names, line: `Di ${names}`, none };
+    }
+    const n = `${rainy.length} dari ${sc.kec.length} Kecamatan`;
+    return { phrase: n, line: `Di ${n}`, none };
+  }
+  const kabs = [...new Set(rainy.map((k) => k.kab))].sort((a, b) => kabRank(a) - kabRank(b));
+  if (rainy.length <= 2) {
+    // satu kab/kota: "Nongsa dan Sekupang (Batam)"; beda: "Bintan Timur (Bintan) dan Meral (Karimun)"
+    const names =
+      kabs.length === 1
+        ? `${joinNames(rainy.map((k) => k.name))} (${kabs[0]})`
+        : joinNames(rainy.map((k) => `${k.name} (${k.kab})`));
+    return { phrase: names, line: `Di ${names}`, none };
+  }
+  const where = kabs.length <= 3 ? joinNames(kabs) : `${kabs.length} Kabupaten/Kota`;
+  return { phrase: `${rainy.length} Kecamatan Kepri`, line: `${rainy.length} Kecamatan di ${where}`, none };
 }
 
-type Cond = { text: string; level: EchoLevel | null; known: boolean; where: string };
-function rainCond(echo: EchoSummary | null): Cond {
-  if (!echo) return { text: "Lihat Warna di Peta", level: null, known: false, where: "" };
-  const where = rainWhere(echo);
-  if (echo.near) {
-    const level = rainLevel(echo) ?? "ringan";
-    return { text: LEVEL_TEXT[level], level, known: true, where };
+type Cond = { text: string; level: EchoLevel | null; known: boolean; where: string; line: string; none: string };
+function rainCond(echo: EchoSummary | null, scope: RainScope): Cond {
+  if (!echo) return { text: "Lihat Warna di Peta", level: null, known: false, where: "", line: "", none: "" };
+  const w = rainWhere(echo, scope);
+  const sc = scoped(echo, scope);
+  if (sc.near) {
+    const level = rainLevel(echo, scope) ?? "ringan";
+    return { text: LEVEL_TEXT[level], level, known: true, where: w.phrase, line: w.line, none: w.none };
   }
-  if (echo.lastTs) return { text: "Hujan Sudah Reda", level: null, known: true, where };
-  return { text: "Tidak Ada Hujan", level: null, known: true, where };
+  if (sc.lastTs) return { text: "Hujan Sudah Reda", level: null, known: true, where: w.none, line: w.none, none: w.none };
+  return { text: "Tidak Ada Hujan", level: null, known: true, where: w.none, line: w.none, none: w.none };
 }
 /** "Hujan Ringan di Sekupang dan Batu Aji" / "Tidak Ada Hujan di Kota Batam". */
 const condSentence = (c: Cond) => (c.known ? `${c.text} di ${c.where}` : c.text);
@@ -233,8 +279,11 @@ export function rainAnswer(a: {
   status: LoadStatus;
   offline: boolean;
   now: number;
+  /** Kota Batam (bawaan) atau semua kab/kota Kepri dalam jangkauan radar */
+  scope?: RainScope;
 }): Answer {
   const { echo, frames, rv, status, offline, now } = a;
+  const scope = a.scope ?? "batam";
   const latest = rv.latest;
   const base = (headline: string, context: string, extra: Partial<Answer> = {}): Answer => ({
     headline,
@@ -254,7 +303,7 @@ export function rainAnswer(a: {
     return base("Memuat Radar…", "", { tone: "muted", live: "" });
   }
 
-  const cond = rainCond(echo);
+  const cond = rainCond(echo, scope);
   const t = latest.time;
   const lastLabel = `Terakhir ${whenLabel(latest, now)}`;
   const share = cond.known ? `Radar ${t} WIB: ${condSentence(cond)}` : `Radar Hujan Batam ${t} WIB`;
@@ -284,15 +333,15 @@ export function rainAnswer(a: {
   let context: string;
   // Jam citra radar ada di ujung kanan penggeser ("Terbaru 11.30 WIB"), jadi baris konteks
   // cukup menyebut DI MANA — muat satu baris di HP.
-  if (!echo) context = "Deteksi Hujan Gagal, Lihat Warna di Peta";
-  else if (echo.near)
-    context = echo.kec ? `Di ${cond.where}` : `Sekitar Batam, ${pctArea(echo.coverage)}% Area`;
-  else if (echo.lastTs) {
-    const last = frames.find((f) => f.ts === echo.lastTs)?.time;
-    context = `${cond.where}, Terakhir ${last ?? "—"}`;
+  const sc = echo ? scoped(echo, scope) : null;
+  if (!echo || !sc) context = "Deteksi Hujan Gagal, Lihat Warna di Peta";
+  else if (sc.near) context = echo.kec ? cond.line : `Sekitar Batam, ${pctArea(echo.coverage)}% Area`;
+  else if (sc.lastTs) {
+    const last = frames.find((f) => f.ts === sc.lastTs)?.time;
+    context = `${cond.none}, Terakhir ${last ?? "—"}`;
   } else {
     const lb = echo.lookbackMin >= 60 && echo.lookbackMin % 60 === 0 ? `${echo.lookbackMin / 60} Jam` : `${echo.lookbackMin} Menit`;
-    context = `${cond.where}, ${lb} Terakhir`;
+    context = `${cond.none}, ${lb} Terakhir`;
   }
   const answer: Answer = {
     headline: cond.text,
@@ -331,36 +380,54 @@ export function rainCaption(rv: RadarView, now: number): Caption {
   };
 }
 
-/** "Hujan per Kecamatan": 12 kecamatan, yang hujan dulu (terderas, terluas), sisanya urut nama. */
-export function kecTable(e: EchoSummary | null): { name: string; level: EchoLevel | null; text: string }[] {
+export type KecRow = { code: string; name: string; level: EchoLevel | null; text: string };
+export type KecGroup = { kab: string; rows: KecRow[]; rainy: number };
+
+/**
+ * "Hujan per Kecamatan" dalam cakupan, dikelompokkan per kab/kota (Batam dulu). Di tiap
+ * kelompok yang hujan di atas (terderas, terluas), sisanya urut nama.
+ */
+export function kecTable(e: EchoSummary | null, scope: RainScope = "batam"): KecGroup[] {
   if (!e?.kec) return [];
-  const rows = e.kec.map((k) => {
+  const rank = { lebat: 3, sedang: 2, ringan: 1 } as const;
+  const groups = new Map<string, (KecRow & { rain: number })[]>();
+  for (const k of e.kec) {
+    if (!inScope(k, scope)) continue;
     const level = kecLevel(k);
-    return {
+    const row = {
+      code: k.code,
       name: k.name,
       level,
       rain: k.rain,
       text: level ? `${LEVEL_TEXT[level].replace("Hujan ", "")} · ${fmtM(Math.max(1, Math.round(k.rain)))} km²` : "Tidak Hujan",
     };
-  });
-  const rank = { lebat: 3, sedang: 2, ringan: 1 } as const;
-  return rows
-    .sort((a, b) =>
-      a.level && b.level
-        ? rank[b.level] - rank[a.level] || b.rain - a.rain
-        : a.level
-          ? -1
-          : b.level
-            ? 1
-            : a.name.localeCompare(b.name, "id"),
-    )
-    .map(({ name, level, text }) => ({ name, level, text }));
+    const g = groups.get(k.kab);
+    if (g) g.push(row);
+    else groups.set(k.kab, [row]);
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => kabRank(a) - kabRank(b))
+    .map(([kab, rows]) => {
+      rows.sort((a, b) =>
+        a.level && b.level
+          ? rank[b.level] - rank[a.level] || b.rain - a.rain
+          : a.level
+            ? -1
+            : b.level
+              ? 1
+              : a.name.localeCompare(b.name, "id"),
+      );
+      return { kab, rows: rows.map(({ code, name, level, text }) => ({ code, name, level, text })), rainy: rows.filter((r) => r.level).length };
+    });
 }
 
-/** Nama kecamatan yang sedang hujan beserta kelasnya (untuk garis & label di peta). */
+/** Kode kecamatan yang sedang hujan (semua Kepri) beserta kelasnya — untuk arsiran & label peta. */
 export function rainyMap(e: EchoSummary | null): Map<string, EchoLevel> {
-  return new Map(rainyKec(e?.kec).map((k) => [k.name, k.level]));
+  return new Map(rainyKec(e?.kec).map((k) => [k.code, k.level]));
 }
+
+/** Kab/kota dalam jangkauan (untuk teks penjelasan). */
+export const KAB_LIST = joinNames([...KAB_ORDER]);
 
 // ---- prakiraan BMKG (kelurahan) -------------------------------------------
 export type ForecastStripView = {
