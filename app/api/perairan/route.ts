@@ -1,13 +1,12 @@
-// Prakiraan teks resmi BMKG untuk wilayah perairan "Perairan Kep. Batam" (E.02):
-// kategori & rentang tinggi gelombang, angin, cuaca, dan PERINGATAN DINI. Ini data yang
-// persis Batam (bukan proksi) — pelengkap field warna OFS di mode OMBAK.
+// Prakiraan resmi BMKG untuk "Perairan Kep. Batam" (P.R.02, Stamet Hang Nadim): kategori &
+// tinggi gelombang per jam, angin/hembusan, arus, cuaca — plus PERINGATAN DINI gelombang yang
+// menyebut perairan Batam. Data persis Batam (bukan proksi), pelengkap field warna OFS.
+// Penguraian & pemilihan jam yang berlaku ada di lib/perairan.ts.
 //
-// JEBAKAN: `time_desc` ("Hari ini"/"Besok") relatif ke jam TERBIT, bukan jam sekarang
-// (terbit 23.39 UTC → pagi harinya entri "Besok" yang berlaku). Pilih entri dari jendela
-// valid_from ≤ now < valid_to; kalau tak ada, ambil yang terdekat ke depan (upcoming).
 // WAF BMKG menolak User-Agent "Mozilla/5.0" polos tapi menerima UA browser lengkap.
-import type { PerairanEntry, PerairanResponse } from "@/lib/api-types";
-import { OFS_PERAIRAN, OFS_REFERER } from "@/lib/sources";
+import type { PerairanResponse, PerairanWarn } from "@/lib/api-types";
+import { emptyPerairan, parseBulletin, pickPerairan, warnAt } from "@/lib/perairan";
+import { OFS_PERAIRAN, OFS_REFERER, OFS_WARNINGS } from "@/lib/sources";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 10;
@@ -20,86 +19,60 @@ const HEADERS = {
 };
 // Latensi BMKG terukur 0,7–3,6 dtk → 8 dtk (4 dtk pernah bikin 503 di panggilan pertama).
 const FETCH_TIMEOUT_MS = 8000;
-const LAST_GOOD_MAX_MS = 12 * 3600 * 1000;
+// Berkas terbit ±sekali sehari (issued 12.00 UTC, Last-Modified ±00.00 UTC) dan mencakup
+// 3 hari; data mentah terakhir tetap jujur selama jamnya dipilih ulang tiap request.
+const LAST_GOOD_MAX_MS = 36 * 3600 * 1000;
+// Aman di-cache: respons membawa slot 48 jam ke depan dan klien memilih jamnya sendiri.
 const OK_HEADERS = { "Cache-Control": "public, s-maxage=600, stale-while-revalidate=1800" };
-const EMPTY: PerairanResponse = {
-  code: "E.02",
-  name: "Perairan Kep. Batam",
-  issued: "",
-  current: null,
-  upcoming: false,
-};
+// Peringatan gagal dimuat → status "unknown"; jangan dikunci lama di CDN.
+const WARN_UNKNOWN_HEADERS = { "Cache-Control": "public, s-maxage=60" };
 
 type Raw = Record<string, unknown>;
-
-// "2026-09-26 00:00 UTC" → ms epoch
-function parseUtc(s: string): number {
-  const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}) UTC$/.exec(s);
-  return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) : NaN;
-}
-const str = (v: unknown) => (v == null ? "" : String(v));
-const num = (v: unknown) =>
-  typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" && !Number.isNaN(Number(v)) ? Number(v) : null;
-
-// Data mentah terakhir yang berhasil ditarik. Entri dipilih ULANG tiap request dari jendela
-// valid_from/valid_to, jadi memakai data lama tetap jujur selama jendelanya masih berlaku.
 let lastGood: { raw: Raw; at: number } | null = null;
+// Buletin peringatan yang pernah terlihat (per instance). BMKG MENIMPA warnings.json ±19.00 WIB
+// dengan buletin yang baru berlaku 07.00 WIB esoknya → buletin yang berlaku malam itu hanya
+// ada kalau instance ini sempat melihatnya. Dibuang begitu masa berlakunya habis.
+let bulletins: PerairanWarn[] = [];
+let warnFetchedAt = 0;
+const WARN_FRESH_MS = 24 * 3600e3; // lebih lama tak berhasil ambil → buletin pengganti bisa terlewat
 
-function pick(j: Raw): PerairanResponse {
-  const data = (Array.isArray(j.data) ? j.data : []) as Raw[];
-  const now = Date.now();
-  const entries = data
-    .map((d) => ({ from: parseUtc(str(d.valid_from)), to: parseUtc(str(d.valid_to)), d }))
-    .filter((e) => !Number.isNaN(e.from) && !Number.isNaN(e.to))
-    .sort((a, b) => a.from - b.from);
-  let cur = entries.find((e) => e.from <= now && now < e.to);
-  let upcoming = false;
-  if (!cur) {
-    cur = entries.find((e) => e.from > now);
-    upcoming = !!cur;
-  }
-  const entry: PerairanEntry | null = cur
-    ? {
-        validFrom: new Date(cur.from).toISOString(),
-        validTo: new Date(cur.to).toISOString(),
-        timeDesc: str(cur.d.time_desc),
-        waveCat: str(cur.d.wave_cat),
-        waveDesc: str(cur.d.wave_desc),
-        windFrom: str(cur.d.wind_from),
-        windTo: str(cur.d.wind_to),
-        windMinKt: num(cur.d.wind_speed_min),
-        windMaxKt: num(cur.d.wind_speed_max),
-        weather: str(cur.d.weather),
-        weatherDesc: str(cur.d.weather_desc),
-        warning: str(cur.d.warning_desc).trim(),
-      }
-    : null;
-  return {
-    code: str(j.code) || EMPTY.code,
-    name: str(j.name) || EMPTY.name,
-    issued: str(j.issued),
-    current: entry,
-    upcoming,
-  };
+async function getJson(url: string): Promise<Raw> {
+  const res = await fetch(url, {
+    next: { revalidate: 1800 },
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    headers: HEADERS,
+  });
+  if (!res.ok) throw new Error(`http ${res.status}`);
+  return (await res.json()) as Raw;
 }
 
 export async function GET() {
-  try {
-    const res = await fetch(OFS_PERAIRAN, {
-      next: { revalidate: 1800 },
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-      headers: HEADERS,
-    });
-    if (!res.ok) throw new Error(`http ${res.status}`);
-    const raw = (await res.json()) as Raw;
-    if (!Array.isArray(raw.data)) throw new Error("schema: data bukan array");
-    lastGood = { raw, at: Date.now() };
-    return Response.json(pick(raw), { headers: OK_HEADERS });
-  } catch (e) {
-    console.warn("[perairan] gagal:", (e as Error)?.message);
-    if (lastGood && Date.now() - lastGood.at < LAST_GOOD_MAX_MS) {
-      return Response.json(pick(lastGood.raw), { headers: { "Cache-Control": "public, s-maxage=120" } });
-    }
-    return Response.json(EMPTY, { status: 503, headers: { "Cache-Control": "no-store" } });
+  const [p, w] = await Promise.allSettled([getJson(OFS_PERAIRAN), getJson(OFS_WARNINGS)]);
+  const now = Date.now();
+  // Peringatan: simpan buletin baru; gagal/skema berubah → tetap pakai yang masih berlaku.
+  if (w.status === "fulfilled") {
+    const b = parseBulletin(w.value);
+    if (b) {
+      warnFetchedAt = now;
+      bulletins = [...bulletins.filter((x) => !(x.from === b.from && x.until === b.until)), b]
+        .filter((x) => Date.parse(x.until) > now)
+        .slice(-4);
+    } else console.warn('[perairan] peringatan: skema berubah (key "Kep. Riau".data.warning tidak dikenali)');
+  } else console.warn("[perairan] peringatan gagal:", (w.reason as Error)?.message);
+  const known = now - warnFetchedAt < WARN_FRESH_MS ? bulletins : [];
+
+  if (p.status === "fulfilled" && Array.isArray(p.value.forecast_day1)) {
+    lastGood = { raw: p.value, at: now };
+    const body = pickPerairan(p.value, known, now) satisfies PerairanResponse;
+    const ok = warnAt(body.warns, now).current.status === "ok";
+    return Response.json(body, { headers: ok ? OK_HEADERS : WARN_UNKNOWN_HEADERS });
   }
+  console.warn(
+    "[perairan] prakiraan gagal:",
+    p.status === "rejected" ? (p.reason as Error)?.message : "schema: forecast_day1 bukan array",
+  );
+  if (lastGood && now - lastGood.at < LAST_GOOD_MAX_MS) {
+    return Response.json(pickPerairan(lastGood.raw, known, now), { headers: { "Cache-Control": "public, s-maxage=120" } });
+  }
+  return Response.json(emptyPerairan(), { status: 503, headers: { "Cache-Control": "no-store" } });
 }

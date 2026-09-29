@@ -119,8 +119,8 @@ export function ForecastSection({
 }
 
 /** Detail OMBAK: prakiraan teks resmi BMKG untuk perairan Batam. */
-export function PerairanInfo({ p, error }: { p: PerairanResponse | null; error: boolean }) {
-  const rows = perairanDetail(p);
+export function PerairanInfo({ p, error, now }: { p: PerairanResponse | null; error: boolean; now: number }) {
+  const rows = perairanDetail(p, now);
   return (
     <section className="d-sec">
       <h3 className="d-title">

@@ -27,8 +27,13 @@ export const NEA = {
 export const OFS_HOST = "https://maritim.bmkg.go.id";
 export const OFS_MODELRUN = `${OFS_HOST}/api21/modelrun`;
 export const OFS_REFERER = `${OFS_HOST}/ofs`;
-/** Prakiraan teks per wilayah perairan (Batam = E.02 "Perairan Kep. Batam"). */
-export const OFS_PERAIRAN = `${OFS_HOST}/public_api/perairan/E.02.json`;
+/**
+ * Prakiraan perairan "Perairan Kep. Batam" (P.R.02) + peringatan dini gelombang per provinsi,
+ * API maritim BMKG baru marine2026-data (dok: maritim.bmkg.go.id/apidoc). Jalur lama
+ * public_api/perairan/E.02.json sudah 404 (dicek 29 Sep 2026).
+ */
+export const OFS_PERAIRAN = `${OFS_HOST}/marine2026-data/perairan/P.R.02.json`;
+export const OFS_WARNINGS = `${OFS_HOST}/marine2026-data/warning/warnings.json`;
 /** Template tile TMS (y-flip) pre-colored contourf swh. z/x/y boleh angka atau placeholder Leaflet. */
 export const ofsTilePath = (
   baserun: string,

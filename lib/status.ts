@@ -21,6 +21,7 @@ import {
   type RainLevel,
   type RainScope,
 } from "./kecamatan";
+import { currentSlot, warnAt } from "./perairan";
 import { ageMinutesOf, ofsValidWib, tsToInstant, type Frame } from "./radar";
 
 /** Di atas ini citra radar dianggap terlambat (MSS terlambat/macet). */
@@ -576,18 +577,27 @@ function windowText(fromIso: string, toIso: string): string {
   return a.key === b.key ? `${a.day} ${a.time}–${b.time} WIB` : `${a.day} ${a.time} – ${b.day} ${b.time} WIB`;
 }
 
-/** Angin panel: "Angin 17–78 km/j dari Utara"; null kalau data angin tak lengkap. */
+/**
+ * Angin panel: "Angin 15 km/j dari Tenggara" (kecepatan rata-rata jam ini; hembusan di Detail).
+ * Respons bentuk lama (rentang min–maks): "Angin 17–78 km/j dari Utara". null kalau tak lengkap.
+ */
 function windKmh(e: PerairanEntry): string | null {
-  if (e.windMinKt === null || e.windMaxKt === null) return null;
   const from = e.windFrom ? ` dari ${arahLengkap(e.windFrom)}` : "";
+  if (e.windKt != null) return `Angin ${ktToKmh(e.windKt)} km/j${from}`;
+  if (e.windMinKt === null || e.windMaxKt === null) return null;
   return `Angin ${ktToKmh(e.windMinKt)}–${ktToKmh(e.windMaxKt)} km/j${from}`;
 }
+/** Tinggi gelombang jam ini: "0,5 m" (bentuk lama: rentang teks "0,5–1,25 m"). */
+const waveText = (e: PerairanEntry) => (e.waveM != null ? `${fmtM(e.waveM)} m` : fmtWave(e.waveDesc));
+/** Rentang meter "0,4–0,6 m" (satu angka kalau sama). */
+const rangeM = (a: number, b: number) => (a === b ? `${fmtM(a)} m` : `${fmtM(a)}–${fmtM(b)} m`);
 
 export function ofsAnswer(
   p: PerairanResponse | null,
   perairanError: boolean,
   ov: OfsView,
   offline: boolean,
+  now: number = Date.now(),
 ): Answer & { warning: string | null } {
   const plain = (headline: string, context: string, extra: Partial<Answer> = {}) => ({
     headline,
@@ -608,7 +618,7 @@ export function ofsAnswer(
       ? plain("Kamu Sedang Offline", "Peta Ombak Muncul Lagi Saat Ada Sinyal", { tone: "warn" })
       : plain("Data Ombak Gangguan", "Belum Bisa Memuat Data BMKG", { tone: "warn", retry: true });
   }
-  const e = p?.current;
+  const { entry: e, upcoming } = currentSlot(p, now);
   if (!e) {
     if (!ov.ready || (!p && !perairanError)) return plain("Memuat Prakiraan Ombak…", "", { tone: "muted", live: "" });
     return plain("Lihat Warna di Peta", "Teks Prakiraan Perairan BMKG Belum Tersedia", {
@@ -617,15 +627,15 @@ export function ofsAnswer(
   }
 
   const cat = titleCase(e.waveCat) || "—";
-  const range = fmtWave(e.waveDesc);
+  const range = waveText(e);
   const headline = `Ombak ${cat}${range ? `, ${range}` : ""}`;
   const wind = windKmh(e);
-  const context = p?.upcoming
+  const context = upcoming
     ? `Mulai ${hhmm(e.validFrom)}${wind ? ` · ${wind}` : ""}`
     : wind
       ? `Perairan Batam · ${wind}`
       : `Perairan Batam · Berlaku sampai ${hhmm(e.validTo)} WIB`;
-  const warning = e.warning ? titleCase(e.warning) : null;
+  const warning = warnText(p, e, now);
   return {
     headline,
     context,
@@ -639,27 +649,76 @@ export function ofsAnswer(
   };
 }
 
+/**
+ * Chip peringatan: "Peringatan Gelombang Tinggi 2,5–4 m", dengan "· Mulai 07.00" kalau buletin
+ * belum berlaku. Respons lama tanpa `warn` → teks warning di entri.
+ */
+function warnText(p: PerairanResponse | null, e: PerairanEntry, now: number): string | null {
+  if (!p?.warns) return e.warning ? titleCase(e.warning) : null;
+  const { current, next } = warnAt(p.warns, now);
+  if (current.status === "ok" && current.text) return titleCase(current.text);
+  // sekarang jelas aman, tapi buletin berikut menyebut Batam → beri tahu kapan mulainya
+  if (current.status === "ok" && next?.text) return `${titleCase(next.text)} · Mulai ${hhmm(next.from)}`;
+  // status sekarang tak diketahui (buletin yang berlaku malam ini sudah ditimpa BMKG) tapi
+  // buletin terbaru menyebut Batam → anggap berlaku (lebih aman daripada diam)
+  if (current.status !== "ok" && next?.text) return titleCase(next.text);
+  return null;
+}
+/** Baris "Peringatan" di Detail — "Belum Tersedia" kalau berkas peringatan gagal dimuat. */
+function warnRows(p: PerairanResponse, e: PerairanEntry, now: number): { k: string; v: string }[] {
+  if (!p.warns) {
+    const until = e.warningUntil ? wibParts(e.warningUntil) : null;
+    return [{ k: "Peringatan", v: e.warning ? `${titleCase(e.warning)}${until ? ` (s.d. ${until.day} ${until.time} WIB)` : ""}` : "Tidak Ada" }];
+  }
+  const { current, next } = warnAt(p.warns, now);
+  const until = current.until ? wibParts(current.until) : null;
+  const rows = [
+    {
+      k: "Peringatan",
+      v:
+        current.status !== "ok"
+          ? "Belum Tersedia"
+          : current.text
+            ? `${titleCase(current.text)}${until ? ` (s.d. ${until.day} ${until.time} WIB)` : ""}`
+            : "Tidak Ada",
+    },
+  ];
+  if (next) {
+    const from = wibParts(next.from);
+    if (from) rows.push({ k: "Buletin Berikut", v: `Mulai ${from.day} ${from.time} WIB: ${next.text ? titleCase(next.text) : "Tidak Ada"}` });
+  }
+  return rows;
+}
+
 /** Isi "Prakiraan Perairan Batam (BMKG)" di Detail: label → nilai. */
-export function perairanDetail(p: PerairanResponse | null): { k: string; v: string }[] {
-  const e = p?.current;
+export function perairanDetail(p: PerairanResponse | null, now: number = Date.now()): { k: string; v: string }[] {
+  const e = currentSlot(p, now).entry;
   if (!p || !e) return [];
   const rows: { k: string; v: string }[] = [];
-  rows.push({ k: "Ombak", v: `${titleCase(e.waveCat)}${e.waveDesc ? `, ${fmtWave(e.waveDesc)}` : ""}` });
-  if (e.windMinKt !== null && e.windMaxKt !== null) {
+  const wave = waveText(e);
+  rows.push({ k: "Ombak", v: `${titleCase(e.waveCat)}${wave ? `, ${wave}` : ""}` });
+  if (e.next12) rows.push({ k: "12 Jam ke Depan", v: rangeM(e.next12.minM, e.next12.maxM) });
+  const from = e.windFrom ? ` dari ${arahLengkap(e.windFrom)}` : "";
+  if (e.windKt != null) {
+    rows.push({ k: "Angin", v: `${fmtM(e.windKt)} knot (${ktToKmh(e.windKt)} km/j)${from}` });
+    if (e.gustKt != null) rows.push({ k: "Hembusan", v: `${fmtM(e.gustKt)} knot (${ktToKmh(e.gustKt)} km/j)` });
+  } else if (e.windMinKt !== null && e.windMaxKt !== null) {
     rows.push({
       k: "Angin",
-      v: `${e.windMinKt}–${e.windMaxKt} knot (${ktToKmh(e.windMinKt)}–${ktToKmh(e.windMaxKt)} km/j)${
-        e.windFrom ? ` dari ${arahLengkap(e.windFrom)}` : ""
-      }`,
+      v: `${e.windMinKt}–${e.windMaxKt} knot (${ktToKmh(e.windMinKt)}–${ktToKmh(e.windMaxKt)} km/j)${from}`,
     });
   }
+  if (e.currentKt != null) {
+    rows.push({ k: "Arus", v: `${fmtM(Math.round(e.currentKt * 10) / 10)} knot${e.currentTo ? ` ke ${arahLengkap(e.currentTo)}` : ""}` });
+  }
   if (e.weather) rows.push({ k: "Cuaca", v: titleCase(e.weather) });
-  rows.push({ k: "Peringatan", v: e.warning ? titleCase(e.warning) : "Tidak Ada" });
-  // time_desc BMKG ("Hari ini"/"H+2") relatif ke jam TERBIT, bukan hari ini → tampilkan jendelanya.
+  rows.push(...warnRows(p, e, now));
   const win = windowText(e.validFrom, e.validTo);
   if (win) rows.push({ k: "Berlaku", v: win });
   const issued = p.issued ? wibParts(p.issued) : null;
   if (issued) rows.push({ k: "Terbit", v: `${issued.day} ${issued.date}, ${issued.time} WIB` });
+  const station = p.station || e.station;
+  if (station) rows.push({ k: "Penerbit", v: titleCase(station.toLowerCase()) });
   return rows;
 }
 

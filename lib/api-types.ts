@@ -46,30 +46,63 @@ export type FramesResponse = {
   echo: EchoSummary | null;
 };
 
-/** Prakiraan teks resmi BMKG per wilayah perairan (Batam = E.02 "Perairan Kep. Batam"). */
+/**
+ * Prakiraan resmi BMKG untuk "Perairan Kep. Batam" (P.R.02, API marine2026-data, lib/perairan.ts).
+ * Kolom bagian atas = bentuk LAMA (API public_api E.02 yang sudah mati) dan tetap diisi demi
+ * bundel lama yang masih terbuka; klien baru membaca kolom opsional di bawahnya.
+ */
 export type PerairanEntry = {
-  validFrom: string; // ISO UTC
+  validFrom: string; // ISO UTC — awal jam/slot prakiraan yang berlaku
   validTo: string; // ISO UTC
-  timeDesc: string; // "Hari ini", "Besok", …
+  timeDesc: string; // (lama) kosong
   waveCat: string; // Tenang/Rendah/Sedang/Tinggi/…
-  waveDesc: string; // "0.5 - 1.25 m"
-  windFrom: string;
-  windTo: string;
-  windMinKt: number | null;
-  windMaxKt: number | null;
+  waveDesc: string; // (lama) "0.5 m"
+  windFrom: string; // arah asal angin, nama lengkap ("Tenggara")
+  windTo: string; // (lama) kosong
+  windMinKt: number | null; // (lama) = windKt
+  windMaxKt: number | null; // (lama) = gustKt
   weather: string;
-  weatherDesc: string;
-  /** peringatan dini; kosong = tidak ada */
+  weatherDesc: string; // (lama) kosong
+  /** peringatan dini gelombang resmi yang menyebut perairan Batam; kosong = tidak ada */
   warning: string;
+  /** tinggi gelombang signifikan jam ini (m) */
+  waveM?: number | null;
+  /** kecepatan angin & hembusan (knot) */
+  windKt?: number | null;
+  gustKt?: number | null;
+  /** arah & kecepatan arus (knot) */
+  currentTo?: string;
+  currentKt?: number | null;
+  /** rentang tinggi gelombang 12 jam ke depan (m) */
+  next12?: { minM: number; maxM: number } | null;
+  /** peringatan berlaku sampai (ISO UTC) */
+  warningUntil?: string;
+  /** stasiun penerbit, mis. "STASIUN METEOROLOGI KELAS I HANG NADIM BATAM" */
+  station?: string;
+};
+/** Satu buletin peringatan dini gelombang BMKG (warnings.json), dinilai untuk perairan Batam. */
+export type PerairanWarn = {
+  /** "unknown" = tidak ada buletin yang mencakup saat itu — JANGAN tampilkan "Tidak Ada" */
+  status: "ok" | "unknown";
+  /** kosong = BMKG tidak menyebut perairan Batam */
+  text: string;
+  /** masa berlaku buletin (ISO UTC); bisa di depan (buletin terbit ±12 jam lebih awal) */
+  from: string;
+  until: string;
 };
 export type PerairanResponse = {
   code: string;
   name: string;
   issued: string;
-  /** entri yang mencakup jam sekarang, atau yang terdekat ke depan */
+  /** (bundel lama) entri yang mencakup jam sekarang MENURUT SERVER, atau yang terdekat ke depan */
   current: PerairanEntry | null;
   /** true kalau `current` belum mulai (jendela sekarang tidak ada di data) */
   upcoming: boolean;
+  /** slot yang belum lewat (maks 48 jam) — klien baru memilih sendiri jam yang berlaku */
+  slots?: PerairanEntry[];
+  /** buletin peringatan yang diketahui server (masih berlaku/akan berlaku) — klien menilai dengan jamnya */
+  warns?: PerairanWarn[];
+  station?: string;
 };
 
 export type AqReading = { psi: number; pm25: number | null; label: string; color: string; ts: string | null };

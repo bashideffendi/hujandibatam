@@ -151,6 +151,7 @@ export default function RadarMap() {
     } else if (mode === "ombak") {
       if (reopen) ofs.reopen();
       else ofs.load(false);
+      if (!offline) ofs.loadPerairan();
     }
   });
 
@@ -367,7 +368,7 @@ export default function RadarMap() {
     maskOk: ofs.maskOk,
     offline,
   });
-  const ombak = ofsAnswer(ofs.perairan, ofs.perairanError, ov, offline);
+  const ombak = ofsAnswer(ofs.perairan, ofs.perairanError, ov, offline, now);
   // jam peta sudah ada di penggeser ("Peta BMKG 15.00 WIB, Sekarang")
   const ombakEyebrow = "Model Gelombang BMKG";
   const ombakCap = ofsCaption(ov);
@@ -610,7 +611,7 @@ export default function RadarMap() {
             )}
             {mode === "ombak" && (
               <>
-                <PerairanInfo p={ofs.perairan} error={ofs.perairanError} />
+                <PerairanInfo p={ofs.perairan} error={ofs.perairanError} now={now} />
                 <OfsCategories />
               </>
             )}

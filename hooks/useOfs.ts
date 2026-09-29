@@ -8,7 +8,9 @@ import { usePolling } from "./usePolling";
 import { useResource } from "./useResource";
 
 const REFRESH_MS = 2 * 60 * 1000;
-const PERAIRAN_MS = 30 * 60 * 1000; // prakiraan teks BMKG terbit 2x sehari
+// Berkas perairan BMKG terbit ±sekali sehari & respons membawa slot 48 jam (klien memilih jam
+// yang berlaku sendiri) → 30 menit cukup; peringatan gelombang ikut di respons yang sama.
+const PERAIRAN_MS = 30 * 60 * 1000;
 const OFS_PLAY_MS = 1100; // animasi timeline gelombang lebih pelan dari radar
 
 /**
@@ -68,7 +70,9 @@ export function useOfs({
     if (!enabled) manualRef.current = false;
   }, [enabled]);
 
-  const perairan = useResource<PerairanResponse>("/api/perairan", PERAIRAN_MS, enabled, true);
+  // Data lama DIPERTAHANKAN saat gagal (mis. revisit tanpa sinyal): slot 48 jam di dalamnya tetap
+  // akurat dan currentSlot() sendiri mengembalikan null begitu semua slot lewat.
+  const perairan = useResource<PerairanResponse>("/api/perairan", PERAIRAN_MS, enabled, false);
 
   // Sweep timeline prakiraan SEKALI lalu berhenti (tile dimuat tiap langkah — jangan berputar).
   const count = ofs?.frames.length ?? 0;
@@ -117,6 +121,7 @@ export function useOfs({
     maskOk,
     perairan: perairan.data,
     perairanError: perairan.error,
+    loadPerairan: perairan.load,
     load,
     reopen,
     scrub,
