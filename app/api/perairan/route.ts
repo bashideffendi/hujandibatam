@@ -36,9 +36,12 @@ let bulletins: PerairanWarn[] = [];
 let warnFetchedAt = 0;
 const WARN_FRESH_MS = 24 * 3600e3; // lebih lama tak berhasil ambil → buletin pengganti bisa terlewat
 
-async function getJson(url: string): Promise<Raw> {
+// Prakiraan: Data Cache Next boleh (berkas harian; slot dipilih ulang tiap request).
+// Peringatan: TANPA Data Cache — cache Next menyajikan entri basi sebagai 200 saat BMKG gagal,
+// sehingga "gagal ambil" tak pernah terdeteksi dan aturan kesegaran 24 jam tak jalan.
+async function getJson(url: string, fresh = false): Promise<Raw> {
   const res = await fetch(url, {
-    next: { revalidate: 1800 },
+    ...(fresh ? { cache: "no-store" as const } : { next: { revalidate: 1800 } }),
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     headers: HEADERS,
   });
@@ -47,14 +50,15 @@ async function getJson(url: string): Promise<Raw> {
 }
 
 export async function GET() {
-  const [p, w] = await Promise.allSettled([getJson(OFS_PERAIRAN), getJson(OFS_WARNINGS)]);
+  const [p, w] = await Promise.allSettled([getJson(OFS_PERAIRAN), getJson(OFS_WARNINGS, true)]);
   const now = Date.now();
   // Peringatan: simpan buletin baru; gagal/skema berubah → tetap pakai yang masih berlaku.
   if (w.status === "fulfilled") {
     const b = parseBulletin(w.value);
     if (b) {
       warnFetchedAt = now;
-      bulletins = [...bulletins.filter((x) => !(x.from === b.from && x.until === b.until)), b]
+      // satu masa mulai = satu buletin: terbitan koreksi (from sama, isi/until beda) menggantikan yang lama
+      bulletins = [...bulletins.filter((x) => x.from !== b.from), b]
         .filter((x) => Date.parse(x.until) > now)
         .slice(-4);
     } else console.warn('[perairan] peringatan: skema berubah (key "Kep. Riau".data.warning tidak dikenali)');

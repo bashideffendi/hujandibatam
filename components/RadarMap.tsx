@@ -151,7 +151,8 @@ export default function RadarMap() {
     } else if (mode === "ombak") {
       if (reopen) ofs.reopen();
       else ofs.load(false);
-      if (!offline) ofs.loadPerairan();
+      // cek koneksi SAAT INI (state `offline` di closure bisa belum berubah saat event "online")
+      if (navigator.onLine !== false) ofs.loadPerairan();
     }
   });
 

@@ -104,9 +104,11 @@ export function warnAt(
 ): { current: PerairanWarn; next: PerairanWarn | null } {
   const t = (iso: string) => Date.parse(iso);
   const list = (warns ?? []).filter((w) => w.status === "ok");
+  // mulai paling akhir menang; seri → yang terakhir di daftar (paling baru diambil server)
   const current = list
-    .filter((w) => t(w.from) <= now && now < t(w.until))
-    .sort((a, b) => t(b.from) - t(a.from))[0] ?? { status: "unknown", text: "", from: "", until: "" };
+    .map((w, i) => ({ w, i }))
+    .filter(({ w }) => t(w.from) <= now && now < t(w.until))
+    .sort((a, b) => t(b.w.from) - t(a.w.from) || b.i - a.i)[0]?.w ?? { status: "unknown", text: "", from: "", until: "" };
   const next =
     list
       .filter((w) => t(w.from) > now && t(w.from) - now <= WARN_LEAD_MS)
